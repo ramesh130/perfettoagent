@@ -1,8 +1,8 @@
 # Roadmap
 
-The features, in build order. Each item gets its own spec (`docs/specs/<nn>-<slug>.md`)
-before implementation starts, and its own GitHub issue and branch. See `mission.md` for why
-and `tech-stack.md` for tools and limits.
+The features, in build order. Each item has a GitHub issue that serves as its spec
+(ADR-0003), and its own branch. See `mission.md` for why and `tech-stack.md` for tools and
+limits.
 
 Status: `[ ]` todo, `[~]` in progress, `[x]` done.
 
