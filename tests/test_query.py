@@ -4,7 +4,13 @@ import json
 
 import pytest
 
-from perfettoagent.query import MAX_ROWS, QueryRejected, query_trace
+from perfettoagent.query import (
+    MAX_ROWS,
+    QueryRejected,
+    join_includes,
+    query_trace,
+    split_includes,
+)
 from perfettoagent.trace_processor import TraceProcessorError
 
 
@@ -178,3 +184,67 @@ def test_missing_trace_is_an_error(spy_binary, tmp_path):
     with pytest.raises(TraceProcessorError, match="no trace file"):
         query_trace("SELECT 1", tmp_path / "missing.pftrace", binary=binary)
     assert not marker.exists()
+
+
+def test_max_rows_none_returns_every_row(trace_processor, tiny_trace):
+    # For canned metric SQL only; the control is the capped test above.
+    result = query_trace(
+        "SELECT id FROM slice ORDER BY id",
+        tiny_trace,
+        binary=trace_processor,
+        max_rows=None,
+    )
+    assert len(result["rows"]) == result["row_count"] == 840
+    assert result["truncated"] is False
+
+
+def test_cited_sql_splits_back_into_statement_and_modules():
+    statement = "-- what it counts\nSELECT count(*) AS n FROM android_startups"
+    modules = ["android.startup.startups", "slices.with_context"]
+    cited = join_includes(statement, modules)
+    assert cited == (
+        "INCLUDE PERFETTO MODULE android.startup.startups;\n"
+        "INCLUDE PERFETTO MODULE slices.with_context;\n" + statement
+    )
+    assert split_includes(cited) == (statement, modules)
+
+
+@pytest.mark.parametrize(
+    ("text", "statement", "modules"),
+    [
+        ("SELECT 1", "SELECT 1", []),
+        ("include perfetto module a.b;SELECT 1", "SELECT 1", ["a.b"]),
+        ("-- note\n  INCLUDE PERFETTO MODULE a;\n\nSELECT 1", "\nSELECT 1", ["a"]),
+        # Only a leading INCLUDE is peeled; a later one stays for the gate to reject.
+        (
+            "SELECT 1; INCLUDE PERFETTO MODULE a;",
+            "SELECT 1; INCLUDE PERFETTO MODULE a;",
+            [],
+        ),
+        # What follows the INCLUDEs comes back as it is, for the gate to judge.
+        (
+            "INCLUDE PERFETTO MODULE a; DROP x;",
+            "DROP x;",
+            ["a"],
+        ),
+    ],
+)
+def test_split_includes_peels_only_leading_includes(text, statement, modules):
+    assert split_includes(text) == (statement, modules)
+
+
+def test_a_split_citation_still_goes_through_the_gate(spy_binary, tiny_trace):
+    binary, marker = spy_binary
+    statement, modules = split_includes("INCLUDE PERFETTO MODULE a;\nDELETE FROM slice")
+    with pytest.raises(QueryRejected):
+        query_trace(statement, tiny_trace, modules=modules, binary=binary)
+    assert not marker.exists()
+
+
+def test_cited_sql_reruns_through_query_trace(trace_processor, tiny_trace):
+    cited = join_includes(
+        "SELECT count(*) AS n FROM android_startups", ["android.startup.startups"]
+    )
+    statement, modules = split_includes(cited)
+    result = query_trace(statement, tiny_trace, modules=modules, binary=trace_processor)
+    assert result["columns"] == ["n"]

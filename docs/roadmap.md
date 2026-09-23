@@ -23,7 +23,7 @@ Download `trace_processor_shell` 58.2, verify its sha256, and cache it. Build th
 - **Done when:** `tp` returns rows from a devicelab trace, a tampered archive is refused, and
   a non-SELECT statement is rejected.
 
-### 3. [ ] Metric library ([#3](https://github.com/ramesh130/perfettoagent/issues/3) tracer, [#7](https://github.com/ramesh130/perfettoagent/issues/7) startup, [#8](https://github.com/ramesh130/perfettoagent/issues/8) frames, [#9](https://github.com/ramesh130/perfettoagent/issues/9) thread/memory)
+### 3. [~] Metric library ([#3](https://github.com/ramesh130/perfettoagent/issues/3) tracer, [#7](https://github.com/ramesh130/perfettoagent/issues/7) startup, [#8](https://github.com/ramesh130/perfettoagent/issues/8) frames, [#9](https://github.com/ramesh130/perfettoagent/issues/9) thread/memory)
 Canned SQL, each tested against a fixture trace with a known answer.
 
 | Metric | Source | Needs baseline |
