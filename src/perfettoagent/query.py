@@ -46,6 +46,14 @@ _COUNT = "__perfettoagent_count"
 # ref: https://perfetto.dev/docs/analysis/stdlib-docs
 _MODULE = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)*")
 
+# One `INCLUDE PERFETTO MODULE x;` at the front of cited SQL, with the whitespace and
+# `--` comment lines before it. Keywords are case-insensitive in trace processor's SQL.
+# ref: https://perfetto.dev/docs/analysis/perfetto-sql-syntax#including-perfettosql-modules
+_LEADING_INCLUDE = re.compile(
+    r"(?:\s|--[^\n]*\n)*(?i:INCLUDE\s+PERFETTO\s+MODULE)\s+"
+    r"([a-z0-9_]+(?:\.[a-z0-9_]+)*)\s*;[ \t]*\n?"
+)
+
 # The keywords that can start the main statement after a WITH clause's CTEs. SQLite
 # allows `WITH x AS (...) DELETE ...`, so a leading WITH alone proves nothing.
 # ref: https://www.sqlite.org/lang_with.html
@@ -131,8 +139,9 @@ def query_trace(
     *,
     modules: Sequence[str] = (),
     binary: Path | None = None,
+    max_rows: int | None = MAX_ROWS,
 ) -> dict:
-    """Runs one SELECT on `trace` and returns at most MAX_ROWS of its rows.
+    """Runs one SELECT on `trace` and returns at most `max_rows` of its rows.
 
     Returns `{"columns": [...], "rows": [[...], ...], "row_count": int,
     "truncated": bool}`, which is JSON-serialisable. `row_count` is the true number of
@@ -142,17 +151,16 @@ def query_trace(
     first, by name, for canned SQL that needs them; they never come from the SQL text,
     so the gate stays one-statement-SELECT-only. `binary` defaults to the pinned trace
     processor (downloaded on first use).
+
+    `max_rows=None` returns every row. That is for canned metric SQL, whose rows are
+    joined across two traces in code before anything reaches the model; the agent's
+    tool never passes it, so the model always gets the MAX_ROWS cap.
     """
     statement = check_select(sql)
-    for module in modules:
-        if not _MODULE.fullmatch(module):
-            raise QueryRejected(f"not a Perfetto module name: {module!r}")
+    # The newline before `;` ends any trailing `--` comment in the statement.
+    prelude = join_includes(f"CREATE TEMP VIEW {_VIEW} AS\n{statement}\n;\n", modules)
     binary = binary or resolve_trace_processor()
     trace = Path(trace)
-
-    prelude = "".join(f"INCLUDE PERFETTO MODULE {m};\n" for m in modules)
-    # The newline before `;` ends any trailing `--` comment in the statement.
-    prelude += f"CREATE TEMP VIEW {_VIEW} AS\n{statement}\n;\n"
 
     names = run_sql_script(
         binary,
@@ -164,11 +172,12 @@ def query_trace(
 
     # Positional names (c0, c1, ...) so the query's own column names need no quoting.
     positional = ", ".join(f"c{k}" for k in range(len(columns)))
+    limit = "" if max_rows is None else f" LIMIT {int(max_rows)}"
     out = run_sql_script(
         binary,
         trace,
         prelude + f"WITH q({positional}) AS (SELECT * FROM {_VIEW}) "
-        f"SELECT json_array({positional}) AS {_ROW} FROM q LIMIT {MAX_ROWS};\n"
+        f"SELECT json_array({positional}) AS {_ROW} FROM q{limit};\n"
         f"SELECT count(*) AS {_COUNT} FROM {_VIEW};\n",
     )
     result_sets = _result_sets(out)
@@ -182,6 +191,38 @@ def query_trace(
         "row_count": row_count,
         "truncated": row_count > len(rows),
     }
+
+
+def join_includes(sql: str, modules: Sequence[str]) -> str:
+    """Returns `sql` with an `INCLUDE PERFETTO MODULE` line in front for each module.
+
+    This is how canned SQL is shown to the model (a metric's `sql_used`), so a citation
+    names the modules its numbers depend on; `split_includes` turns it back into the
+    `sql` and `modules` that `query_trace` takes. Raises QueryRejected for a name that
+    is not a module name, so nothing but a module can ride in on one.
+    """
+    for module in modules:
+        if not _MODULE.fullmatch(module):
+            raise QueryRejected(f"not a Perfetto module name: {module!r}")
+    return "".join(f"INCLUDE PERFETTO MODULE {m};\n" for m in modules) + sql
+
+
+def split_includes(text: str) -> tuple[str, list[str]]:
+    """Splits cited SQL into (statement, modules), the inverse of `join_includes`.
+
+    Peels `INCLUDE PERFETTO MODULE <name>;` statements, and any whitespace or comments
+    between them, off the front of `text`; the rest is returned verbatim, unchecked.
+    So `query_trace(*split_includes(sql_used))` re-runs a citation exactly, and the
+    statement still has to pass `check_select` there. An INCLUDE anywhere but in front
+    stays in the statement, where the gate rejects it.
+    """
+    modules: list[str] = []
+    end = 0
+    while m := _LEADING_INCLUDE.match(text, end):
+        modules.append(m.group(1))
+        end = m.end()
+    # Anything after the last INCLUDE, comments included, is the statement's own.
+    return text[end:], modules
 
 
 def _skip_quoted(sql: str, i: int) -> int:
