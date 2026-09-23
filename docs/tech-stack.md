@@ -12,7 +12,7 @@ this file, first record an ADR in `docs/adr/`.
 | Lint / format | `ruff` | Rules `E, F, I, B, UP`. A Claude Code hook formats edited `.py` files. |
 | Tests | `pytest` + `pytest-socket` | `--disable-socket` is always on, so the suite must pass with no network. |
 | CLI | `argparse` | Subcommands `diagnose`, `review`, `eval`, `tp`. |
-| CI | GitHub Actions | Runs `uv sync --locked`, ruff check, ruff format --check and pytest on every PR and on pushes to `main`. |
+| CI | GitHub Actions | Runs `uv sync --locked`, ruff check, ruff format --check and pytest. Manual only (`workflow_dispatch`) until there is an Actions budget; until then run the same checks locally. |
 | License | Apache-2.0 | ADR-0002. |
 
 ## Model and SDK

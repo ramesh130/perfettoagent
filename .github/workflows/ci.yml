@@ -1,9 +1,12 @@
 name: CI
 
+# Automatic runs are disabled: the account's GitHub Actions budget is $0.
+# To re-enable, restore these triggers:
+#   pull_request:
+#   push:
+#     branches: [main]
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
