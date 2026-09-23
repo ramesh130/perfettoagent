@@ -7,7 +7,7 @@ __pycache__/
 dist/
 build/
 
-# Eval outputs: only the committed summary table is tracked (PRD §10)
+# Eval outputs: only the committed summary table is tracked (roadmap item 9)
 evals/results/*
 !evals/results/summary.md
 
