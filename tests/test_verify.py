@@ -4,6 +4,7 @@ it must leave alone, against the tiny fixture trace and a git repo built per tes
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -91,15 +92,21 @@ def repo(tmp_path_factory) -> Repo:
     r.merge("m1", "side")
     r.git("checkout", "-q", "--orphan", "vendor")
     r.git("rm", "-rq", "--cached", ".")
-    for leftover in ("app", "docs", "README.md"):
-        subprocess.run(["rm", "-rf", str(r.path / leftover)], check=True)
+    shutil.rmtree(r.path / "app")
+    shutil.rmtree(r.path / "docs")
+    (r.path / "README.md").unlink()
     r.commit("o1", {"lib/Other.kt": "object Other\n"})
     r.git("checkout", "-q", "-f", "main")
     r.merge("m2", "vendor", "--allow-unrelated-histories")
     r.git("checkout", "-q", "unmerged")
     r.commit("x1", {"app/Startup.kt": "fun start() {}\n"})
     r.git("checkout", "-q", "main")
+    # A tag whose name is a sha prefix, on a commit whose sha does not start with it.
+    r.git("tag", SHADOWING_TAG, r.sha["c2"])
     return r
+
+
+SHADOWING_TAG = "abcdef1"
 
 
 @pytest.fixture(scope="module")
@@ -356,6 +363,12 @@ def test_a_commit_that_does_not_exist_is_dropped(run_verify_git, sha):
     result = run_verify_git(output(claim("bad", commit(sha))))
     assert result["verdict"] == "inconclusive"
     assert result["dropped_claims"][0]["citations"][0]["commit"] is None
+
+
+def test_a_ref_named_like_a_sha_does_not_answer_for_it(run_verify_git, repo):
+    assert not repo.sha["c2"].startswith(SHADOWING_TAG)
+    result = run_verify_git(output(claim("tag", commit(SHADOWING_TAG))))
+    assert "names no commit" in dropped_reason(result)
 
 
 def test_a_sha_of_a_non_commit_object_is_dropped(run_verify_git, repo):

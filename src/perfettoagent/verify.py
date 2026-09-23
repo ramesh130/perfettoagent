@@ -33,23 +33,31 @@ Nothing here imports the Anthropic SDK or calls a model.
 import copy
 import hashlib
 import json
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from perfettoagent.diagnosis import SCHEMA_VERSION, check_diagnosis, check_output
+from perfettoagent.diagnosis import (
+    SCHEMA_VERSION,
+    SIDES,
+    check_diagnosis,
+    check_output,
+)
 from perfettoagent.git import (
     SHA,
     GitError,
     changed_paths,
     is_ancestor,
     resolve_commit,
+    resolve_sha,
 )
 from perfettoagent.query import QueryRejected, query_trace, split_includes
 from perfettoagent.trace_processor import (
     TraceProcessorError,
     default_cache_dir,
     resolve_trace_processor,
+    sha256_of,
 )
 
 # Where the agent keeps re-run citation results between runs (ADR-0006). A keyed
@@ -69,9 +77,35 @@ class RangeError(ValueError):
 
 @dataclass(frozen=True)
 class _Range:
+    """`base..head` in `repo`, both ends resolved to full shas."""
+
     repo: Path
-    base: str  # full sha
-    head: str  # full sha
+    base: str
+    head: str
+
+    @classmethod
+    def parse(cls, repo: Path, git_range: str) -> "_Range":
+        base, sep, head = git_range.partition("..")
+        if not sep or not base or not head or head.startswith("."):
+            raise RangeError(f"a range is base..head, not {git_range!r}")
+        ends = {}
+        for name, rev in (("base", base), ("head", head)):
+            full = resolve_commit(repo, rev)
+            if full is None:
+                raise RangeError(f"the range's {name}, {rev!r}, names no commit")
+            ends[name] = full
+        return cls(repo, ends["base"], ends["head"])
+
+    def resolve(self, sha: str) -> str | None:
+        """The full sha of the commit a model-written `sha` names, or None."""
+        return resolve_sha(self.repo, sha)
+
+    def contains(self, commit: str) -> bool:
+        """What `git log base..head` lists: an ancestor of head (or head), and not an
+        ancestor of base (or base)."""
+        return is_ancestor(self.repo, commit, self.head) and not is_ancestor(
+            self.repo, commit, self.base
+        )
 
 
 def verify(
@@ -98,20 +132,20 @@ def verify(
     bytes and the SQL, so a citation already re-run on the same inputs is not re-run;
     QUERY_CACHE_DIR is the agent's. Without it, results are shared within this call.
 
-    Raises RangeError for a malformed range, GitError if `repo` cannot be read, and
+    Raises RangeError for a malformed range, GitError if `repo` cannot be read,
+    GitUnavailable if git cannot run, FileNotFoundError for a missing trace, and
     TraceProcessorError if the trace processor cannot be found: those are failures of
     the run, not of a citation, and must not look like a model that cited nothing.
     `output` is not modified.
     """
     started = time.monotonic()
     check_output(output)
-    traces = {"current": Path(current), "baseline": None}
-    if baseline is not None:
-        traces["baseline"] = Path(baseline)
+    given = {"baseline": baseline, "current": current}
+    traces = {side: None if t is None else Path(t) for side, t in given.items()}
     for side, trace in traces.items():
         if trace is not None and not trace.is_file():
             raise FileNotFoundError(f"no {side} trace at {trace}")
-    commits = _parse_range(Path(repo), git_range)
+    rng = _Range.parse(Path(repo), git_range)
     queries = _Queries(traces, binary, cache_dir)
 
     diagnosis = copy.deepcopy(output)
@@ -124,7 +158,7 @@ def verify(
             if citation["kind"] == "trace":
                 _check_trace(citation, queries)
             else:
-                _check_commit(citation, commits)
+                _check_commit(citation, rng)
             checked += 1
             if citation["error"] is None:
                 passed += 1
@@ -141,7 +175,7 @@ def verify(
     if metric_dropped:
         diagnosis["metric"] = None
 
-    culprit_dropped = _check_culprit(diagnosis["culprit"], kept, commits)
+    culprit_dropped = _check_culprit(diagnosis["culprit"], kept, rng)
     if culprit_dropped:
         diagnosis["culprit"] = None
 
@@ -188,41 +222,42 @@ def _check_trace(citation: dict, queries: "_Queries") -> None:
     citation["error"] = error
 
 
-def _check_commit(citation: dict, commits: _Range) -> None:
+def _check_commit(citation: dict, rng: _Range) -> None:
     """Rule 2. Sets the citation's `commit` (full sha) and `error`."""
-    citation["commit"] = None
-    citation["error"] = _commit_error(citation, commits)
-
-
-def _commit_error(citation: dict, commits: _Range) -> str | None:
     sha, path = citation["sha"], citation["path"]
+    citation["commit"] = None
+    citation["error"] = None
     if not SHA.fullmatch(sha):
-        return f"{sha!r} is not a commit sha (7 to 64 lower-case hex digits)"
+        citation["error"] = (
+            f"{sha!r} is not a commit sha (7 to 64 lower-case hex digits)"
+        )
+        return
+    full = rng.resolve(sha)
+    if full is None:
+        citation["error"] = f"{sha} names no commit in the repo (or is ambiguous)"
+        return
+    citation["commit"] = full
+    if not rng.contains(full):
+        citation["error"] = f"{sha} is not inside the range"
+        return
+    if path is None:
+        return
     try:
-        full = resolve_commit(commits.repo, sha)
-        if full is None:
-            return f"{sha} names no commit in the repo (or is ambiguous)"
-        citation["commit"] = full
-        if not _in_range(full, commits):
-            return f"{sha} is not inside the range"
-        if path is not None and not changed_paths(commits.repo, full, path):
-            return f"{sha} does not change {path!r}"
+        touched = changed_paths(rng.repo, full, path)
     except GitError as e:
-        return str(e)
-    return None
-
-
-def _in_range(commit: str, commits: _Range) -> bool:
-    return is_ancestor(commits.repo, commit, commits.head) and not is_ancestor(
-        commits.repo, commit, commits.base
-    )
+        # git refused the path itself (outside the repo, say): the citation's fault.
+        # git failing to run at all is GitUnavailable, not a GitError: it raises.
+        citation["error"] = str(e)
+        return
+    if not touched:
+        citation["error"] = f"{sha} does not change {path!r}"
 
 
 def _check_metric(metric: dict | None, queries: "_Queries") -> str | None:
     """The metric's sql_used, as a trace citation on each side it has a value for."""
     if metric is None:
         return None
-    for side in ("baseline", "current"):
+    for side in SIDES:
         if metric[side] is None:
             continue
         _, error = queries.row_count(side, metric["sql_used"])
@@ -231,18 +266,13 @@ def _check_metric(metric: dict | None, queries: "_Queries") -> str | None:
     return None
 
 
-def _check_culprit(culprit: dict | None, kept: list, commits: _Range) -> str | None:
+def _check_culprit(culprit: dict | None, kept: list, rng: _Range) -> str | None:
     """Rule 4: a surviving claim must cite the culprit, compared as full shas, so a
     short and a full sha of the same commit match."""
     if culprit is None:
         return None
     sha = culprit["commit"]
-    full = None
-    if SHA.fullmatch(sha):
-        try:
-            full = resolve_commit(commits.repo, sha)
-        except GitError:
-            full = None
+    full = rng.resolve(sha)
     if full is None:
         return f"{sha!r} names no commit in the repo"
     cited = {
@@ -254,19 +284,6 @@ def _check_culprit(culprit: dict | None, kept: list, commits: _Range) -> str | N
     if full not in cited:
         return f"no surviving claim cites the culprit commit {sha}"
     return None
-
-
-def _parse_range(repo: Path, git_range: str) -> _Range:
-    base, sep, head = git_range.partition("..")
-    if not sep or not base or not head or head.startswith("."):
-        raise RangeError(f"a range is base..head, not {git_range!r}")
-    ends = {}
-    for name, rev in (("base", base), ("head", head)):
-        full = resolve_commit(repo, rev)
-        if full is None:
-            raise RangeError(f"the range's {name}, {rev!r}, names no commit")
-        ends[name] = full
-    return _Range(repo, ends["base"], ends["head"])
 
 
 class _Queries:
@@ -302,10 +319,12 @@ class _Queries:
         # the run's failure, raised, never a citation's.
         if self._binary is None:
             self._binary = resolve_trace_processor()
+        # A timeout is the query's own doing (a runaway join), so it fails the
+        # citation like any other query that does not run; it is never cached.
         cached = self._cache_path(trace, statement, modules)
         if cached is not None and cached.is_file():
             try:
-                return json.loads(cached.read_text())["row_count"], None
+                return int(json.loads(cached.read_text())["row_count"]), None
             except (OSError, ValueError, KeyError):
                 pass  # a damaged entry is re-run and rewritten
         try:
@@ -315,7 +334,8 @@ class _Queries:
         except TraceProcessorError as e:
             return None, f"did not run: {_gist(str(e))}"
         if cached is not None:
-            _write_atomically(cached, json.dumps(result))
+            # Only the count: it is all a rule reads, and an entry stays tiny.
+            _write_atomically(cached, json.dumps({"row_count": result["row_count"]}))
         return result["row_count"], None
 
     def _cache_path(self, trace: Path, statement: str, modules: list) -> Path | None:
@@ -331,18 +351,15 @@ class _Queries:
 
     def _digest(self, path: Path) -> str:
         if path not in self._digests:
-            h = hashlib.sha256()
-            with path.open("rb") as f:
-                for chunk in iter(lambda: f.read(1 << 20), b""):
-                    h.update(chunk)
-            self._digests[path] = h.hexdigest()
+            self._digests[path] = sha256_of(path)
         return self._digests[path]
 
 
 def _write_atomically(path: Path, text: str) -> None:
-    """A concurrent verify sees the whole entry or none of it."""
+    """A concurrent verify sees the whole entry or none of it: a rename within one
+    directory is atomic. ref: https://docs.python.org/3/library/os.html#os.replace"""
     path.parent.mkdir(parents=True, exist_ok=True)
-    partial = path.with_suffix(f".{time.monotonic_ns()}.tmp")
+    partial = path.with_suffix(f".{os.getpid()}.{time.monotonic_ns()}.tmp")
     partial.write_text(text)
     partial.replace(path)
 
