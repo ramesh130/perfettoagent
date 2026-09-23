@@ -5,6 +5,8 @@ description = "Agentic Android performance triage: Perfetto trace + git range in
 authors = [
     { name = "Ramesh Prasad", email = "ramesh130@gmail.com" }
 ]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = []
 
