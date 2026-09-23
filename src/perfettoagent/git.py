@@ -27,7 +27,8 @@ from pathlib import Path
 # network filesystem, a lock), and the verifier should fail rather than hang.
 GIT_TIMEOUT_S = 60
 
-# A commit named by the model: hex only, so it can never be an option or a ref name.
+# A commit named by the model: hex only, so it can never be an option. (It can still
+# be a ref's name; `resolve_sha` refuses a ref that shadows the prefix.)
 # 7 is git's default abbreviation; 64 is a full sha256 object name.
 # ref: https://git-scm.com/docs/hash-function-transition
 SHA = re.compile(r"[0-9a-f]{7,64}")
@@ -46,8 +47,20 @@ _REDIRECTING_ENV = (
 )
 
 
+# The subcommands docs/tech-stack.md allows on the target repo, all read-only. Any
+# other is refused before it runs, so a later caller cannot slip in a write.
+ALLOWED_SUBCOMMANDS = frozenset(
+    {"log", "diff", "blame", "grep", "cat-file", "merge-base"}
+)
+
+
 class GitError(RuntimeError):
-    """git could not answer: not a repo, a bad revision, or a failed command."""
+    """git answered with an error: not a repo, a bad path, a failed command."""
+
+
+class GitUnavailable(RuntimeError):
+    """git could not be run at all, or timed out. Not a GitError on purpose: a caller
+    that turns a GitError into a verdict on its input must let this one through."""
 
 
 def run_git(repo: Path, args: list[str], *, stdin: str | None = None) -> str:
@@ -76,6 +89,20 @@ def resolve_commit(repo: Path, rev: str) -> str | None:
     if len(fields) == 2 and fields[1] == "commit":
         return fields[0]
     return None
+
+
+def resolve_sha(repo: Path, sha: str) -> str | None:
+    """The full sha of the commit that `sha`, a hex prefix, names; None if none does.
+
+    git resolves a ref before an object prefix, so a tag or branch named `abcdef1`
+    would answer for the prefix `abcdef1`. Such an answer is refused: the commit found
+    must start with the digits given.
+    ref: https://git-scm.com/docs/gitrevisions#_specifying_revisions
+    """
+    if not SHA.fullmatch(sha):
+        return None
+    full = resolve_commit(repo, sha)
+    return full if full is not None and full.startswith(sha) else None
 
 
 def is_ancestor(repo: Path, commit: str, of: str) -> bool:
@@ -140,6 +167,10 @@ def _empty_tree(commit: str) -> str:
 def _run(
     repo: Path, args: list[str], stdin: str | None = None
 ) -> subprocess.CompletedProcess:
+    if args[0] not in ALLOWED_SUBCOMMANDS:
+        raise ValueError(
+            f"git {args[0]} is not a read-only subcommand this repo allows"
+        )
     env = {k: v for k, v in os.environ.items() if k not in _REDIRECTING_ENV}
     try:
         return subprocess.run(
@@ -160,4 +191,4 @@ def _run(
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as e:
-        raise GitError(f"could not run git {args[0]}: {e}") from e
+        raise GitUnavailable(f"could not run git {args[0]}: {e}") from e

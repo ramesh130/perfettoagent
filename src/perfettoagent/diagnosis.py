@@ -28,6 +28,7 @@ ref: https://json-schema.org/understanding-json-schema/reference
 ref: https://docs.claude.com/en/docs/build-with-claude/structured-outputs
 """
 
+# Bumped by any change a reader of an older diagnosis.json would misread (ADR-0006).
 SCHEMA_VERSION = 1
 
 VERDICTS = ("regression", "no_regression", "inconclusive")
@@ -52,6 +53,15 @@ _KEYWORDS = {
     "additionalProperties",
     "items",
     "description",
+}
+
+# JSON Schema's types, for those Python checks with one isinstance.
+_PYTHON_TYPES = {
+    "string": str,
+    "boolean": bool,
+    "null": type(None),
+    "object": dict,
+    "array": list,
 }
 
 _STRING = {"type": "string"}
@@ -304,15 +314,6 @@ def _is_type(value, name: str) -> bool:
     if name == "number":
         return isinstance(value, int | float) and not isinstance(value, bool)
     return isinstance(value, _PYTHON_TYPES[name])
-
-
-_PYTHON_TYPES = {
-    "string": str,
-    "boolean": bool,
-    "null": type(None),
-    "object": dict,
-    "array": list,
-}
 
 
 def _type_name(value) -> str:

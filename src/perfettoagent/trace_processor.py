@@ -119,7 +119,7 @@ def resolve_trace_processor(
     if (
         binary.is_file()
         and record.is_file()
-        and _sha256_of(binary) == record.read_text().strip()
+        and sha256_of(binary) == record.read_text().strip()
     ):
         return binary
     if not allow_download:
@@ -137,7 +137,7 @@ def resolve_trace_processor(
     with tempfile.TemporaryDirectory(dir=install_dir, prefix=".download-") as work:
         archive = Path(work) / f"{platform}.zip"
         fetch(RELEASE_URL.format(version=PERFETTO_VERSION, platform=platform), archive)
-        if _sha256_of(archive) != pinned:
+        if sha256_of(archive) != pinned:
             raise TraceProcessorError(
                 f"the downloaded Perfetto {PERFETTO_VERSION} archive for {platform} "
                 "does not match its pinned sha256; refusing to run it"
@@ -160,7 +160,7 @@ def resolve_trace_processor(
         # binary or the new one. The record goes last: a binary without one is
         # downloaded again.
         os.replace(extracted, binary)
-        record.write_text(_sha256_of(binary) + "\n")
+        record.write_text(sha256_of(binary) + "\n")
     return binary
 
 
@@ -229,7 +229,9 @@ def _pinned_sha256(version: str, platform: str, pin_file: Path) -> str:
     )
 
 
-def _sha256_of(path: Path) -> str:
+def sha256_of(path: Path) -> str:
+    """The sha256 of a file's bytes, read 1 MiB at a time so a 23 MB trace is never
+    held in memory whole."""
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1 << 20), b""):

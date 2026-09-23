@@ -43,7 +43,8 @@ Canned SQL, each tested against a fixture trace with a known answer.
 ### 4. [x] Verifier (the guardrail) ([#4](https://github.com/ramesh130/perfettoagent/issues/4))
 Deterministic checks that run after the model's final output and before anything is written:
 1. Re-run each trace citation's SQL. It must parse, and `row_count` must be ≥ 1.
-2. For each commit citation, `git cat-file -e` must succeed, the commit must be inside
+2. For each commit citation, the sha must resolve to a commit (`git cat-file
+   --batch-check`, ADR-0006), the commit must be inside
    `--range` (checked with `merge-base --is-ancestor`), and it must touch `path` when a path
    is given.
 3. Drop any claim with a failed citation and log it under `dropped_claims` with the reason.
