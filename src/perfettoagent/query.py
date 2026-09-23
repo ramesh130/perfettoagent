@@ -51,6 +51,7 @@ _MODULE = re.compile(r"[a-z0-9_]+(\.[a-z0-9_]+)*")
 # ref: https://www.sqlite.org/lang_with.html
 _MAIN_STATEMENT = {"select", "values", "insert", "update", "delete", "replace"}
 
+# A bare SQLite identifier or keyword.
 _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_$]*")
 
 
