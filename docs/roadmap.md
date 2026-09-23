@@ -12,7 +12,7 @@ Build the evaluation in week 1, not at the end.
 
 **Exit:** `perfettoagent tp --trace x --sql "…"` works, and `pytest` is green with no network.
 
-### 1. [~] Project scaffolding ([#1](https://github.com/ramesh130/perfettoagent/issues/1))
+### 1. [x] Project scaffolding ([#1](https://github.com/ramesh130/perfettoagent/issues/1))
 The uv package, ruff, pytest with sockets disabled, and a CLI stub.
 - **Done when:** ruff check, ruff format --check and pytest pass offline.
 
