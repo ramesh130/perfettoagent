@@ -182,7 +182,10 @@ def run_sql_script(binary: Path, trace: Path, script: str) -> str:
             [str(binary), "query", "-f", "-", str(trace)],
             input=script,
             capture_output=True,
-            text=True,
+            # Trace strings are UTF-8 whatever the locale; a stray invalid byte in one
+            # must not lose the whole result.
+            encoding="utf-8",
+            errors="replace",
             timeout=QUERY_TIMEOUT_S,
             check=False,
         )

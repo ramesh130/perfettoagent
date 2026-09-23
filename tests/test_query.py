@@ -133,16 +133,16 @@ def test_values_survive_the_round_trip(trace_processor, tiny_trace):
     sql = """
         SELECT 'a,"b"' AS quoted, 'x' || char(10) || 'y' AS newline, NULL AS missing,
                '[NULL]' AS null_text, 1e-9 AS tiny, 1.0 / 3 AS third, '42' AS text_num,
-               9007199254740993 AS big, 1 AS "odd ""name"", here"
+               9007199254740993 AS big, 1 AS "odd ""name"", here", 'café ✓' AS utf8
     """
     result = query_trace(sql, tiny_trace, binary=trace_processor)
     assert result["columns"] == [
         "quoted", "newline", "missing", "null_text", "tiny", "third", "text_num", "big",
-        'odd "name", here',
+        'odd "name", here', "utf8",
     ]  # fmt: skip
     assert result["rows"] == [
         ['a,"b"', "x\ny", None, "[NULL]", 1e-9, pytest.approx(1 / 3), "42",
-         9007199254740993, 1],
+         9007199254740993, 1, "café ✓"],
     ]  # fmt: skip
     json.dumps(result)  # the tool result is JSON-serialisable
 
