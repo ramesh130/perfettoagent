@@ -1,0 +1,19 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# Eval outputs: only the committed summary table is tracked (PRD §10)
+evals/results/*
+!evals/results/summary.md
+
+# Local diagnose outputs
+out/
+
+# Claude Code personal files
+CLAUDE.local.md
+.claude/settings.local.json
