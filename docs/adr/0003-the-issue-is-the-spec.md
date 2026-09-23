@@ -1,0 +1,3 @@
+# The GitHub issue is the spec; no separate `docs/specs/` files
+
+The roadmap first asked for a `docs/specs/<nn>-<slug>.md` per item, agreed before any code. Once the issues were split into vertical slices, each with testable acceptance criteria, a spec file repeated most of its issue. What was left for it (interfaces, and the decisions the issue leaves open) is settled while implementing anyway. So the issue is now the spec. The PR body records the interfaces it introduces and argues each open decision, and the review of that PR is the agreement step. A decision that is hard to reverse still becomes an ADR. Affects `docs/roadmap.md` and `CLAUDE.md`.

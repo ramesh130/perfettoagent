@@ -11,9 +11,9 @@ The product is defined by three docs:
   before starting any feature.
 
 Workflow for each roadmap item:
-1. Write `docs/specs/<nn>-<slug>.md` (scope, interfaces, acceptance tests) from the roadmap
-   entry, and get it agreed before writing code.
-2. Implement on the item's issue branch (`issue-<number>-<short-slug>`); issues live in GitHub.
+1. The item's GitHub issue is its spec (ADR-0003): its acceptance criteria are the tests.
+2. Implement on the item's issue branch (`issue-<number>-<short-slug>`). The PR body records
+   the interfaces it introduces and argues any decision the issue leaves open.
 3. When done, flip the item's status in `docs/roadmap.md`.
 
 Diverging from these docs is fine; silent divergence is not. Log every divergence and every
