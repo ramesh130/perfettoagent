@@ -1,4 +1,4 @@
--- @description: Reachable Java objects per class in the last Java heap dump of each trace. A class that grows between baseline and current is retained by something that did not exist before.
+-- @description: Reachable Java objects in the last Java heap dump of each trace. The headline is all reachable objects; the breakdown is per class, ranked by growth from baseline to current.
 -- @unit: objects
 -- @requires_baseline: true
 -- @key: class
@@ -13,8 +13,10 @@
 -- ref: https://perfetto.dev/docs/analysis/stdlib-docs#android-memory-heap_graph-heap_graph_class_aggregation
 -- ref: https://perfetto.dev/docs/data-sources/java-heap-profiler
 --
--- The last dump: a trace can hold several (one per process, or one per trigger). The
+-- The last dump: a trace can hold several (one per trigger, or one per process). The
 -- last one is the state the trace ended in, which is what a baseline is compared at.
+-- With dumps of several processes, that is the one process dumped last; the traces
+-- this compares (one app, one dump each, as devicelab captures them) hold one.
 --
 -- Grouped by name, not class id: a class loaded by two class loaders is two ids with one
 -- name, and splitting it would show one class twice.

@@ -6,8 +6,10 @@ adding one is adding a file and its fixture test, with no change to the code her
 A file is a header of `--` comment lines, then the SQL. In the header, the
 `-- @field: value` lines are the metadata `list_metrics` reports, and every other line
 is a note for whoever edits the file. The SQL starts at the first line that is not a
-comment, and from there on the file is `sql_used`, verbatim: any `INCLUDE PERFETTO
-MODULE` lines first, then one SELECT, exactly as the model sees and cites it.
+comment: any `INCLUDE PERFETTO MODULE` lines first, then one SELECT. A scalar metric's
+`sql_used` is that SQL verbatim; a keyed metric's wraps it (below), INCLUDE lines
+still first and verbatim. Either way it is exactly what the model sees and cites.
+ADR-0005 records this result shape.
 
     @description        what it measures, for the model choosing a metric (required)
     @unit               the unit of every value, e.g. ms, objects, bytes (required)
@@ -55,10 +57,20 @@ METRIC_DIR = files(__name__)
 # gives the true total, and the model can narrow further with query_trace.
 BREAKDOWN_ROWS = 40
 
+# One `-- @field: value` metadata line in a metric file's header (format above).
 _FIELD = re.compile(r"--\s*@(\w+):\s*(.*)")
+
+# The header fields, as the module docstring lists them. Any other @field is refused,
+# so a misspelt one (`@requires_basline`) fails loudly instead of defaulting.
 _REQUIRED = ("description", "unit", "requires_baseline")
 _OPTIONAL = ("key",)
+
+# Exactly these spellings: "yes", "1" or "no" in a hand-edited header are refused
+# rather than guessed at.
 _BOOLEANS = {"true": True, "false": False}
+
+# The two sides of a comparison, in the order results report them.
+_SIDES = ("baseline", "current")
 
 
 class MetricError(ValueError):
@@ -129,21 +141,14 @@ def compute_metric(
     if metric.requires_baseline and baseline is None:
         raise MetricError(f"{name} needs a baseline trace to compare against")
 
-    traces = {"baseline": baseline, "current": current}
+    traces = dict(zip(_SIDES, (baseline, current), strict=True))
     statement, modules = split_includes(metric.sql)
     if metric.key is None:
-        values = {
-            side: None if trace is None else _scalar_of(metric.sql, name, trace, binary)
-            for side, trace in traces.items()
-        }
         sql_used = metric.sql
     else:
         headline = f"SELECT sum(value) AS value FROM (\n{statement}\n)"
         sql_used = join_includes(headline, modules)
-        values = {
-            side: None if trace is None else _scalar_of(sql_used, name, trace, binary)
-            for side, trace in traces.items()
-        }
+    values = _per_side(traces, lambda t: _scalar_of(sql_used, name, t, binary))
 
     result = {
         "name": name,
@@ -156,6 +161,11 @@ def compute_metric(
     if metric.key is not None:
         result["breakdown"] = _breakdown(metric, statement, modules, traces, binary)
     return result
+
+
+def _per_side(traces: dict, run) -> dict:
+    """{side: run(trace)} for each side, None for a side with no trace."""
+    return {side: None if t is None else run(t) for side, t in traces.items()}
 
 
 def _scalar_of(sql_used: str, name: str, trace, binary):
@@ -179,12 +189,9 @@ def _breakdown(
     binary,
 ) -> dict:
     """The keys that changed most, or the largest keys without a baseline."""
-    per_side = {
-        side: None
-        if trace is None
-        else _keyed(metric, statement, modules, trace, binary)
-        for side, trace in traces.items()
-    }
+    per_side = _per_side(
+        traces, lambda t: _values_by_key(metric, statement, modules, t, binary)
+    )
     base, cur = per_side["baseline"], per_side["current"]
     if base is None:
         rows = [
@@ -216,8 +223,9 @@ def _breakdown(
     }
 
 
-def _keyed(metric: Metric, statement: str, modules, trace, binary) -> dict:
-    # Every row: the join across two traces happens here, before the model sees any.
+def _values_by_key(metric: Metric, statement: str, modules, trace, binary) -> dict:
+    """{key: value} for every row of a keyed metric on one trace. Every row, uncapped:
+    the join across two traces happens here, before the model sees any of it."""
     result = query_trace(
         statement, trace, modules=modules, binary=binary, max_rows=None
     )
@@ -255,11 +263,14 @@ def _sql_literal(value) -> str:
 
 
 def _sort_key(key) -> tuple:
-    # Keys of mixed types (a NULL key beside text) still sort, deterministically.
+    """The tie-break between rows of equal value: by key, so the order is the same on
+    every run. Python cannot compare text with numbers or None, which one metric's keys
+    may mix, so keys sort by type name first, then by value; NULL last."""
     return (key is None, str(type(key)), key if key is not None else 0)
 
 
 def _delta(baseline, current):
+    """current - baseline, or None when either side has no value to subtract."""
     if baseline is None or current is None:
         return None
     return current - baseline

@@ -10,8 +10,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 # A small Android emulator trace: 840 slices, 2542 threads, 375 processes.
 TINY_TRACE = FIXTURES / "tiny.perfetto-trace"
 
-# Set to 1 where the binary is known to be present (CI after its fetch step), so a
-# missing binary fails the run instead of silently skipping the tests that need it.
+# Set to 1 where the real-trace inputs are known to be present (CI, after its fetch
+# step and an LFS checkout), so a missing binary, or an LFS pointer in place of a
+# fixture, fails the run instead of silently skipping the tests that need them.
 REQUIRE_ENV = "PERFETTOAGENT_REQUIRE_TRACE_PROCESSOR"
 
 
@@ -53,10 +54,13 @@ def large_fixture(name: str) -> Path:
     with path.open("rb") as f:
         head = f.read(len(LFS_POINTER))
     if head == LFS_POINTER:
-        pytest.skip(
+        message = (
             f"{path.name} is a Git LFS pointer, not the trace: this clone was made "
             "without LFS. Fetch the fixtures with: git lfs install && git lfs pull"
         )
+        if os.environ.get(REQUIRE_ENV) == "1":
+            pytest.fail(f"{REQUIRE_ENV}=1 but {message}")
+        pytest.skip(message)
     return path
 
 

@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           # The large trace fixtures are in Git LFS (ADR-0004). Without this, their
-          # tests would skip on pointer files, which the flag below does not catch.
+          # tests would find pointer files, which the flag on the test step fails.
           lfs: true
       - uses: astral-sh/setup-uv@v10
         with:
