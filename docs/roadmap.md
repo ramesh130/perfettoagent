@@ -32,7 +32,7 @@ Canned SQL, each tested against a fixture trace with a known answer.
 | `jank_frames_pct`, `frame_p95_ms`, `frame_p99_ms` | `actual_/expected_frame_timeline_slice` | yes |
 | `main_thread_blocked_ms` | `thread_state`, `slice` | no |
 | `binder_wait_ms` | `slice` (binder) | no |
-| `heap_growth_objects_by_class` | `heap_graph_object`, `heap_graph_class` | yes |
+| `heap_growth_objects_by_class` | stdlib `heap_graph_class_aggregation` (reachable objects in `heap_graph_object`, by `heap_graph_class`) | yes |
 | `native_unfreed_bytes` | `heap_profile_allocation` | no |
 | `gc_time_ms` | `slice` (`GC`) | no |
 

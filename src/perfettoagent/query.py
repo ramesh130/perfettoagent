@@ -1,7 +1,9 @@
 """`query_trace`: one read-only SQL query against a trace, capped at MAX_ROWS rows.
 
 This is the code path behind both `perfettoagent tp` and the agent's `query_trace` tool,
-so the gate and the row cap below hold for both.
+so the gate and the row cap below hold for both. The cap is the default; only canned
+metric SQL (`perfettoagent.metrics`) lifts it, to join two traces' rows in code before
+the model sees them. Neither `tp` nor the agent's tool can.
 
 How rows come back. trace_processor_shell prints each result set as CSV, but not
 reversibly: embedded double quotes are not escaped, NULL prints as "[NULL]", and reals

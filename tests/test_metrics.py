@@ -29,7 +29,7 @@ def test_list_metrics_describes_the_library():
         "requires_baseline": True,
         "key": "class",
     }
-    assert "Reachable Java objects per class" in entries[HEAP]["description"]
+    assert "Reachable Java objects" in entries[HEAP]["description"]
     json.dumps(list_metrics())
 
 
@@ -169,15 +169,15 @@ def test_heap_growth_on_fixture_pair(heap_result):
     rows = {
         r["key"]: (r["baseline"], r["current"], r["delta"]) for r in breakdown["rows"]
     }
-    # The largest growth is ordinary churn ...
+    # The largest growth is in framework and library classes ...
     assert [r["key"] for r in breakdown["rows"][:3]] == [
         "java.lang.String",
         "androidx.media3.exoplayer.hls.playlist.HlsMediaPlaylist$Segment",
         "java.lang.Object[]",
     ]
     assert rows["java.lang.String"] == (119160, 122363, 3203)
-    # ... and below it, a cohort of classes that grew by exactly the same count, the
-    # app's own among them: one object graph, retained whole.
+    # ... and below it, seven classes grew by exactly the same count, two of the app's
+    # own among them: rows that sit within the cap, where the model can see them.
     assert sum(1 for _, _, delta in rows.values() if delta == 137) == 7
     assert rows["com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1"] == (15, 152, 137)
     assert rows["com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0"] == (
@@ -192,7 +192,9 @@ def test_heap_growth_known_answer_matches_the_raw_tables(
     heap_result, trace_processor, heap_a_pair
 ):
     # An independent count: the raw heap graph tables and their own reachable flag,
-    # not the stdlib aggregation, for the headline and for every row shown.
+    # not the stdlib aggregation, for the headline and for every row shown. The SQL,
+    # quoting included, is written out here rather than built with the code under
+    # test, so that a bug there cannot hide in both.
     last_dump = (
         "o.graph_sample_ts = (SELECT max(graph_sample_ts) FROM heap_graph_object)"
     )

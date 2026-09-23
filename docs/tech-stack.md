@@ -61,7 +61,7 @@ Every tool is a Python function with a strict JSON schema (`strict: true`,
 |---|---|
 | `query_trace(sql, which)` | Accepts only `SELECT`/`WITH`. Returns at most **200 rows**, capped in our code, and `row_count` always gives the true total. |
 | `list_metrics()` | Lists the canned metric library only. |
-| `compute_metric(name)` | Returns the `sql_used` so the model can cite it. |
+| `compute_metric(name)` | Returns the `sql_used` so the model can cite it. A per-key metric also returns at most 40 breakdown rows, and each one has its own `sql_used` (ADR-0005). |
 | `get_git_log(range, paths)` | At most **200 commits**. |
 | `get_git_diff(sha, path, max_lines=400)` | Reports when output was truncated. |
 | `git_blame(path, line_start, line_end, at)` | |
