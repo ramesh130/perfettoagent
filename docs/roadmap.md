@@ -16,7 +16,7 @@ Build the evaluation in week 1, not at the end.
 The uv package, ruff, pytest with sockets disabled, and a CLI stub.
 - **Done when:** ruff check, ruff format --check and pytest pass offline.
 
-### 2. [ ] Trace processor pinning, `query_trace`, and `tp` ([#2](https://github.com/ramesh130/perfettoagent/issues/2))
+### 2. [x] Trace processor pinning, `query_trace`, and `tp` ([#2](https://github.com/ramesh130/perfettoagent/issues/2))
 Download `trace_processor_shell` 58.2, verify its sha256, and cache it. Build the
 `query_trace` tool and a `perfettoagent tp` passthrough. Port the behaviour from devicelab's
 `lib/trace_processor.sh`.

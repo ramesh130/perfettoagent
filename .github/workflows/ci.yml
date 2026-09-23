@@ -29,5 +29,11 @@ jobs:
         run: uv run ruff check .
       - name: Format
         run: uv run ruff format --check .
+      # The one networked step: download and verify the pinned trace processor, so the
+      # tests that query the fixture trace run instead of skipping.
+      - name: Fetch pinned trace processor
+        run: uv run perfettoagent tp --trace tests/fixtures/tiny.perfetto-trace --sql "select 1"
       - name: Test (network disabled via pytest-socket)
         run: uv run pytest -q
+        env:
+          PERFETTOAGENT_REQUIRE_TRACE_PROCESSOR: "1"
