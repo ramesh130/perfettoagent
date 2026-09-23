@@ -33,7 +33,7 @@ measured rather than asserted.
 3. **Measured on planted regressions.** Report detection rate and false-positive rate on at
    least four kinds of regression across at least two apps.
 4. **Reproducible cost.** Record tokens and USD per trace on every run.
-5. **Public-repo quality.** Clonable standalone under MIT or Apache-2.0, with a README that
+5. **Public-repo quality.** Clonable standalone under Apache-2.0 (ADR-0002), with a README that
    opens with the one-liner and a real diagnosis.
 
 ## Principles
