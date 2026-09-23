@@ -40,7 +40,7 @@ Canned SQL, each tested against a fixture trace with a known answer.
 - **Done when:** every metric has a passing fixture test, and `compute_metric` returns
   `sql_used`.
 
-### 4. [ ] Verifier (the guardrail) ([#4](https://github.com/ramesh130/perfettoagent/issues/4))
+### 4. [x] Verifier (the guardrail) ([#4](https://github.com/ramesh130/perfettoagent/issues/4))
 Deterministic checks that run after the model's final output and before anything is written:
 1. Re-run each trace citation's SQL. It must parse, and `row_count` must be ≥ 1.
 2. For each commit citation, `git cat-file -e` must succeed, the commit must be inside
@@ -50,7 +50,8 @@ Deterministic checks that run after the model's final output and before anything
 4. If a culprit is set, at least one surviving claim must cite it.
 5. If no claim survives, the verdict becomes `inconclusive` with an explanation.
 - **Done when:** unit tests with hand-built bad outputs cover every rule. If the verifier is
-  slow, cache SQL results by hash. Never skip it.
+  slow, cache SQL results by hash. Never skip it. The exact meaning of each rule, and the
+  cache, are in ADR-0006.
 
 ### 5. [ ] Ground truth: planted regressions ([#5](https://github.com/ramesh130/perfettoagent/issues/5) startup, [#6](https://github.com/ramesh130/perfettoagent/issues/6) jank, [#10](https://github.com/ramesh130/perfettoagent/issues/10) case packaging)
 Add startup and jank scenarios to devicelab, then capture these plants on the superPlayer
@@ -95,7 +96,7 @@ Input rules:
   silently.
 
 Outputs:
-- `diagnosis.json` (schema 1) with: verdict (`regression`, `no_regression` or
+- `diagnosis.json` (schema 1, ADR-0006) with: verdict (`regression`, `no_regression` or
   `inconclusive`); the metric with baseline, current and delta; confidence; the culprit
   (commit, files, and attribution `direct` or `correlated`); claims with `trace` or `commit`
   citations; caveats; `dropped_claims`; tool-call count; usage and USD; and wall time.
