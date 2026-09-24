@@ -97,7 +97,8 @@ ceiling, and each capped result says whether it was cut and gives the true total
 
 - Run evals with a local runner, `perfettoagent eval` or `evals/run_eval.py` (ADR-0016,
   ADR-0027). Each case is staged afresh per run, and each set of runs shares one model,
-  effort level and metric choice, in `evals/results/<model>-<effort>-<metric>/`. `evalharness`
+  effort level and metric choice (`--provider`, `--model`, `--effort`), in
+  `evals/results/<model>-<effort>-<metric>/`, never pooled with another (ADR-0029). `evalharness`
   (`pareto-eval`) was checked first. Its scorer and aggregator cannot express item 9's rates
   or repeated runs, and integrating would cost more than a day. The ADR records the gap.
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from perfettoagent import evalrun
+from perfettoagent import cli, evalrun
 from perfettoagent.cli import main
 from perfettoagent.loop import RunFailed
 
@@ -189,6 +189,77 @@ def test_an_unfetched_lfs_trace_stops_the_run_before_any_diagnosis(
     with pytest.raises(SystemExit, match="Git LFS pointer"):
         run(copy, tmp_path / "out", fake)
     assert fake.calls == []
+
+
+def test_the_model_and_effort_reach_every_run_and_its_result(root, culprit, tmp_path):
+    fake = FakeDiagnose(root, culprit)
+    out = tmp_path / "out"
+    run(root, out, fake, runs=1, cases=[CLEAN], provider="anthropic",
+        model="claude-opus-5-5", effort="low")  # fmt: skip
+    [call] = fake.calls
+    assert (call["provider"], call["model"], call["effort"]) == (
+        "anthropic",
+        "claude-opus-5-5",
+        "low",
+    )
+    result = json.loads((out / "runs" / CLEAN / "1" / "result.json").read_text())
+    assert (result["provider"], result["model"], result["effort"]) == (
+        "anthropic",
+        "claude-opus-5-5",
+        "low",
+    )
+    scores = json.loads((out / "scores.json").read_text())
+    assert (scores["model"], scores["effort"]) == ("claude-opus-5-5", "low")
+
+
+def test_results_from_other_settings_are_never_pooled(root, culprit, tmp_path):
+    out = tmp_path / "out"
+    run(root, out, FakeDiagnose(root, culprit), runs=1, cases=[CLEAN])
+    again = FakeDiagnose(root, culprit)
+    with pytest.raises(SystemExit, match="never pooled"):
+        run(root, out, again, runs=1, cases=[CLEAN], effort="low")
+    assert again.calls == []
+
+
+def test_the_cli_passes_the_model_and_effort_on(monkeypatch, tmp_path):
+    asked = {}
+
+    def fake_run_eval(out, **kwargs):
+        asked.update(kwargs, out=out)
+        return _SCORES
+
+    monkeypatch.setattr(cli, "run_eval", fake_run_eval)
+    argv = ["eval", "--provider", "anthropic", "--effort", "medium", "--runs", "1"]
+    assert main(argv) == 0
+    assert (asked["provider"], asked["model"], asked["effort"]) == (
+        "anthropic",
+        "claude-opus-5-5",
+        "medium",
+    )
+    assert asked["out"].name == "claude-opus-5-5-medium-auto"
+
+
+@pytest.mark.parametrize(
+    "flags, message",
+    [
+        (["--provider", "anthropic", "--model", "gpt-5.6-luna"], "not anthropic"),
+        (["--effort", "max"], "has no effort 'max'"),
+    ],
+)
+def test_the_cli_refuses_a_model_it_cannot_run(monkeypatch, capsys, flags, message):
+    monkeypatch.setattr(cli, "run_eval", lambda *a, **k: pytest.fail("ran"))
+    assert main(["eval", *flags]) == 2
+    assert message in capsys.readouterr().err
+
+
+_SCORES = {
+    "rates": {
+        name: {"hits": 0, "of": 0}
+        for name in ("detection", "attribution", "false_positive")
+    },
+    "errors": 0,
+    "cost": {"usd": 0.0},
+}
 
 
 def test_the_cli_rejects_zero_runs(capsys):

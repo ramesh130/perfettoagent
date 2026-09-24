@@ -21,6 +21,12 @@ The spread: every rate is also computed per repetition (all cases' first runs, t
 their second, ...), and the report gives the lowest and highest, never only the best.
 A case whose runs disagree on verdict, or on whether they detected or attributed, is
 listed as flipping.
+
+The cache check (docs/tech-stack.md, ADR-0020): from the second repetition on, every
+run that gave a diagnosis must have read its prompt from the cache. `usage` is already
+in one shape for both providers (ADR-0023): `cache_read_input_tokens` is Anthropic's
+own field and OpenAI's `cached_tokens`. A run that read nothing from the cache is
+listed, not scored.
 """
 
 from dataclasses import dataclass, field
@@ -104,6 +110,7 @@ def score(outcomes: list[Outcome], expected: dict[str, Expected]) -> dict:
         "rates": rates,
         "per_case": _per_case(outcomes, expected),
         "cost": _cost(outcomes),
+        "cache": _cache(outcomes),
     }
 
 
@@ -186,6 +193,17 @@ def _per_case(outcomes, expected) -> list[dict]:
             }
         )
     return cases
+
+
+def _cache(outcomes: list[Outcome]) -> dict:
+    """The runs from the second repetition on, and those that read no cached token."""
+    checked = [o for o in outcomes if o.run >= 2 and o.error is None]
+    missing = [
+        f"{o.case_id}/{o.run}"
+        for o in sorted(checked, key=lambda o: (o.case_id, o.run))
+        if o.usage["cache_read_input_tokens"] == 0
+    ]
+    return {"checked": len(checked), "missing": missing}
 
 
 def _cost(outcomes: list[Outcome]) -> dict:
