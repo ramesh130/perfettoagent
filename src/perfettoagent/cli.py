@@ -6,10 +6,14 @@ import sys
 from pathlib import Path
 
 import anthropic
+import openai
 
-from perfettoagent.agent import AUTO, RunFailed, diagnose
+from perfettoagent import models
+from perfettoagent.agent import AUTO, diagnose
+from perfettoagent.credentials import redact
 from perfettoagent.diagnosis import DiagnosisInvalid
 from perfettoagent.git import GitError, GitUnavailable
+from perfettoagent.loop import RunFailed
 from perfettoagent.metrics import UnknownMetric
 from perfettoagent.query import MAX_ROWS, QueryRejected, query_trace
 from perfettoagent.trace_processor import TraceProcessorError
@@ -34,8 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Run the agent on a baseline and a current trace and a range of the target "
             "repo, verify every claim it makes, and write diagnosis.json (schema 1). "
-            "Calls the Anthropic API, with credentials from ANTHROPIC_API_KEY or an "
-            "`ant auth login` profile."
+            "Calls the OpenAI API (OPENAI_API_KEY) or the Anthropic API "
+            "(ANTHROPIC_API_KEY, or an `ant auth login` profile); a key is read from "
+            "the environment, else from ./.env."
         ),
     )
     dx.add_argument("--baseline", required=True, help="the trace before the change")
@@ -48,6 +53,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--metric",
         default=AUTO,
         help=f"a library metric, or {AUTO} (default) for the agent to choose",
+    )
+    dx.add_argument(
+        "--provider",
+        choices=models.PROVIDERS,
+        default=models.DEFAULT_PROVIDER,
+        help=f"the model provider (default: {models.DEFAULT_PROVIDER})",
+    )
+    dx.add_argument(
+        "--model",
+        help="a model id with a price row (default: the provider's own: "
+        + ", ".join(f"{m} on {p}" for p, m in models.DEFAULT_MODELS.items())
+        + ")",
     )
     dx.add_argument(
         "--out",
@@ -94,20 +111,30 @@ def _diagnose(args: argparse.Namespace) -> int:
             repo=args.repo,
             git_range=args.git_range,
             metric=args.metric,
+            provider=args.provider,
+            model=args.model,
         )
-    except (FileNotFoundError, RangeError, UnknownMetric, GitError) as e:
+    except (
+        FileNotFoundError,
+        RangeError,
+        UnknownMetric,
+        GitError,
+        models.ModelRefused,
+    ) as e:
         # Refused before any request: the inputs as given cannot be diagnosed.
         print(f"perfettoagent diagnose: rejected: {e}", file=sys.stderr)
         return EXIT_REJECTED
     except (
         anthropic.AnthropicError,
+        openai.OpenAIError,
         DiagnosisInvalid,
         RunFailed,
         GitUnavailable,
         TraceProcessorError,
     ) as e:
-        # Nothing is written: a diagnosis.json that exists has been verified.
-        print(f"perfettoagent diagnose: {e}", file=sys.stderr)
+        # Nothing is written: a diagnosis.json that exists has been verified. An API
+        # error can quote part of the key it was sent; none is printed.
+        print(f"perfettoagent diagnose: {redact(str(e))}", file=sys.stderr)
         return EXIT_FAILED
     args.out.write_text(json.dumps(diagnosis, indent=2) + "\n")
     print(_summary(diagnosis, args.out))

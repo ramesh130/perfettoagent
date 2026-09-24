@@ -67,6 +67,10 @@ class FakeModel:
             content=_events(message, body["model"]).encode(),
         )
 
+    def first_message(self) -> str:
+        """The first request's user message."""
+        return self.requests[0]["messages"][0]["content"]
+
     def tool_results(self, turn: int) -> dict[str, dict]:
         """The tool results the `turn`th request (1-based) carried, by tool_use id:
         {id: {"content": ..., "is_error": bool}}. Content is parsed as JSON where

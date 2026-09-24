@@ -1,35 +1,41 @@
-"""`diagnose`: the agent loop, its tools, and what it writes (roadmap item 7, #29).
+"""`diagnose`: the agent loops, their tools, and what they write (roadmap item 7, #29,
+#43).
 
-The model is `fake_model.FakeModel`: the SDK's real Tool Runner and streaming parser,
-over an in-process transport, answering from a script. No test opens a socket.
+The model is `fake_model.FakeModel` (Anthropic) or `fake_openai.FakeOpenAI` (OpenAI):
+each SDK's real client and streaming parser over an in-process transport, answering
+from a script. Both play the same scripts, so a test of what `diagnose` does with an
+answer, a refusal or a tool error runs once per provider (`provider`). No test opens a
+socket.
 """
 
 import json
 import re
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from conftest import LFS_POINTER
 from fake_model import USAGE, FakeModel, reply, text, tool_use
+from fake_openai import ENCRYPTED, FakeOpenAI
 from test_eval_cases import HINT_WORDS, hints_in
 
 from perfettoagent import repo_tools
-from perfettoagent.agent import (
-    EFFORT,
-    MAX_TOKENS,
-    MODEL,
-    SYSTEM_PROMPT,
-    RunFailed,
-    UnpricedModel,
-    diagnose,
-    first_message,
-    usd,
-)
+from perfettoagent.agent import SYSTEM_PROMPT, diagnose, first_message
 from perfettoagent.diagnosis import OUTPUT_SCHEMA, DiagnosisInvalid, check_diagnosis
 from perfettoagent.evalcases import EVALS_DIR, load_expected, load_inputs
 from perfettoagent.git import GitUnavailable
+from perfettoagent.loop import MAX_TOKENS, RunFailed
 from perfettoagent.metrics import UnknownMetric
+from perfettoagent.models import (
+    DEFAULT_EFFORT,
+    DEFAULT_MODELS,
+    DEFAULT_PROVIDER,
+    ModelRefused,
+    UnpricedModel,
+    usd,
+)
+from perfettoagent.openai_loop import usage_of
 from perfettoagent.repo_tools import REPO_TOOLS
 from perfettoagent.trace_tools import TRACE_TOOLS
 from perfettoagent.verify import RangeError
@@ -37,6 +43,16 @@ from perfettoagent.verify import RangeError
 # A trace processor that is never reached: these tests' citations are commits only,
 # and `diagnose` resolves the binary only when none is given.
 NO_BINARY = Path("/nonexistent/trace_processor_shell")
+
+# Each provider's scripted stand-in.
+FAKES = {"anthropic": FakeModel, "openai": FakeOpenAI}
+
+
+@pytest.fixture(params=list(FAKES))
+def provider(request) -> str:
+    """Every test that runs `diagnose` runs once per provider, unless it parametrizes
+    `provider` itself."""
+    return request.param
 
 
 # --- A small target repo: a base, one change, and a head ------------------------------
@@ -95,13 +111,14 @@ def answer(repo, *, culprit=True, **overrides) -> dict:
 
 
 @pytest.fixture
-def run(repo, tiny_trace):
+def run(repo, tiny_trace, provider):
     """diagnose() on the tiny trace (as both sides) and the small repo, with `script`
-    as the model. Returns (diagnosis, fake)."""
+    as `provider`'s model. Returns (diagnosis, fake)."""
 
     def go(script, **kwargs):
-        fake = FakeModel(script)
+        fake = FAKES[provider](script)
         args = {
+            "provider": provider,
             "baseline": tiny_trace,
             "current": tiny_trace,
             "repo": repo["path"],
@@ -118,7 +135,7 @@ def run(repo, tiny_trace):
 # --- The loop: a normal answer, a refusal, a cut-off answer ---------------------------
 
 
-def test_a_normal_end_turn_yields_a_verified_diagnosis(run, repo):
+def test_a_normal_end_turn_yields_a_verified_diagnosis(run, repo, provider):
     """The control: one tool call, then an answer, which the verifier keeps."""
 
     def script(request, turn):
@@ -141,17 +158,33 @@ def test_a_normal_end_turn_yields_a_verified_diagnosis(run, repo):
     assert not result["is_error"]
     assert result["content"]["commit_count"] == 2
     run_block = diagnosis["run"]
+    model = DEFAULT_MODELS[provider]
+    assert (run_block["provider"], run_block["model"], run_block["effort"]) == (
+        provider,
+        model,
+        DEFAULT_EFFORT,
+    )
     assert run_block["tool_calls"] == 1
+    # The same usage in both providers' own terms, recorded in one shape.
     assert run_block["usage"] == {k: 2 * v for k, v in USAGE.items()}
-    assert run_block["usd"] == usd(MODEL, run_block["usage"]) > 0
+    assert run_block["usd"] == round(2 * usd(model, USAGE), 6) > 0
     assert run_block["wall_time_s"] >= 0
 
 
-def test_a_refusal_is_inconclusive_with_its_category_and_not_retried(run):
+# What a refusal's caveat names: Anthropic gives a category, OpenAI only its text
+# (ADR-0020).
+REFUSAL_REASON = {"anthropic": "refusal: cyber", "openai": "refusal: I can't help."}
+
+
+def test_a_refusal_is_inconclusive_with_its_category_and_not_retried(run, provider):
     def script(request, turn):
         return reply(
             stop_reason="refusal",
-            stop_details={"type": "refusal", "category": "cyber", "explanation": "x"},
+            stop_details={
+                "type": "refusal",
+                "category": "cyber",
+                "explanation": "I can't   help.",
+            },
         )
 
     diagnosis, fake = run(script)
@@ -159,25 +192,31 @@ def test_a_refusal_is_inconclusive_with_its_category_and_not_retried(run):
     check_diagnosis(diagnosis)
     assert diagnosis["verdict"] == "inconclusive"
     assert diagnosis["claims"] == diagnosis["dropped_claims"] == []
-    assert any("refusal: cyber" in c for c in diagnosis["caveats"])
+    assert any(REFUSAL_REASON[provider] in c for c in diagnosis["caveats"])
     # The verifier still ran, and the run's cost is recorded.
     assert diagnosis["verification"]["explanation"] == "the model made no claims"
     assert diagnosis["run"]["usage"]["input_tokens"] == USAGE["input_tokens"]
 
 
-def test_a_refusal_without_a_category_says_so(run):
+def test_a_refusal_without_a_reason_says_so(run, provider):
     diagnosis, _ = run(lambda request, turn: reply(stop_reason="refusal"))
-    assert any("refusal: unspecified" in c for c in diagnosis["caveats"])
+    reason = {"anthropic": "unspecified", "openai": "no reason given"}[provider]
+    assert any(f"refusal: {reason}" in c for c in diagnosis["caveats"])
 
 
-def test_max_tokens_is_inconclusive_and_the_cut_off_text_is_never_read(run, repo):
+def test_max_tokens_is_inconclusive_and_the_cut_off_text_is_never_read(
+    run, repo, provider
+):
     # Half an answer that would pass if it were read: it must not be.
     half = json.dumps(answer(repo))[:80]
     diagnosis, fake = run(lambda r, t: reply(text(half), stop_reason="max_tokens"))
     assert len(fake.requests) == 1
     assert diagnosis["verdict"] == "inconclusive"
     assert diagnosis["culprit"] is None
-    assert any(f"max_tokens ({MAX_TOKENS})" in c for c in diagnosis["caveats"])
+    assert any(
+        f"cut off at max_{'output_' * (provider == 'openai')}tokens ({MAX_TOKENS})" in c
+        for c in diagnosis["caveats"]
+    )
 
 
 # --- Output validation ----------------------------------------------------------------
@@ -204,18 +243,19 @@ def test_an_invalid_answer_is_rejected(run, repo, bad):
 # --- What the model is sent -----------------------------------------------------------
 
 
-def test_the_request_follows_the_tech_stack(run, repo, tiny_trace):
+@pytest.mark.parametrize("provider", ["anthropic"])
+def test_the_anthropic_request_follows_the_tech_stack(run, repo):
     _, fake = run(lambda request, turn: reply(text(answer(repo))))
     [request] = fake.requests
-    assert request["model"] == MODEL == "claude-opus-5-5"
+    assert request["model"] == DEFAULT_MODELS["anthropic"] == "claude-opus-5-5"
     assert request["max_tokens"] == MAX_TOKENS == 64000
     assert request["stream"] is True
     assert request["thinking"] == {"type": "adaptive"}
     assert request["output_config"] == {
-        "effort": EFFORT,
+        "effort": DEFAULT_EFFORT,
         "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA},
     }
-    assert EFFORT == "high"
+    assert DEFAULT_EFFORT == "high"
     # No forced tool choice, no prefill: the one message is the user's.
     assert "tool_choice" not in request
     assert [m["role"] for m in request["messages"]] == ["user"]
@@ -230,13 +270,121 @@ def test_the_request_follows_the_tech_stack(run, repo, tiny_trace):
     assert {t["name"]: t for t in request["tools"]} == expected
 
 
+@pytest.mark.parametrize("provider", ["openai"])
+def test_the_openai_request_follows_the_tech_stack(run, repo):
+    """ADR-0020's table: the Responses API, streamed, strict tools and structured
+    output, effort sent, no state kept on OpenAI's servers, tool choice `auto`."""
+    _, fake = run(lambda request, turn: reply(text(answer(repo))))
+    [request] = fake.requests
+    assert request["model"] == DEFAULT_MODELS["openai"] == "gpt-5.6-luna"
+    assert request["stream"] is True
+    assert request["max_output_tokens"] == MAX_TOKENS == 64000
+    assert request["reasoning"] == {"effort": DEFAULT_EFFORT}
+    assert request["store"] is False
+    assert "previous_response_id" not in request
+    assert request["include"] == ["reasoning.encrypted_content"]
+    assert request["tool_choice"] == "auto"
+    assert request["text"] == {
+        "format": {
+            "type": "json_schema",
+            "name": "diagnosis",
+            "schema": OUTPUT_SCHEMA,
+            "strict": True,
+        }
+    }
+    # The frozen prompt first, as a developer item; the volatile inputs after it.
+    assert request["input"][0] == {"role": "developer", "content": SYSTEM_PROMPT}
+    assert [i["role"] for i in request["input"]] == ["developer", "user"]
+    # Every tool, with its hand-written schema unchanged, strict.
+    expected = {
+        t.name: {
+            "type": "function",
+            "name": t.name,
+            "description": t.description,
+            "parameters": t.input_schema,
+            "strict": True,
+        }
+        for t in (*TRACE_TOOLS, *REPO_TOOLS)
+    }
+    assert {t["name"]: t for t in request["tools"]} == expected
+
+
+@pytest.mark.parametrize("provider", ["openai"])
+def test_the_openai_history_is_replayed_with_its_reasoning(run, repo):
+    """With no server state, each request resends the whole history: every output
+    item, reasoning included with its encrypted content, then the tool outputs. The
+    prefix (prompt, tools, format) is the same bytes each time, so it can be cached."""
+
+    def script(request, turn):
+        if turn == 1:
+            return reply(
+                tool_use("get_git_log", {"range": repo["range"], "paths": None}),
+                stop_reason="tool_use",
+            )
+        return reply(text(answer(repo)))
+
+    _, fake = run(script)
+    first, second = fake.requests
+    assert second["input"][: len(first["input"])] == first["input"]
+    reasoning, call, output = second["input"][len(first["input"]) :]
+    assert reasoning["type"] == "reasoning"
+    assert reasoning["encrypted_content"] == ENCRYPTED
+    assert call["type"] == "function_call"
+    assert call["call_id"] == output["call_id"] == "toolu_get_git_log"
+    assert output["type"] == "function_call_output"
+    for key in ("tools", "text", "reasoning"):
+        assert json.dumps(first[key]) == json.dumps(second[key])
+
+
+@pytest.mark.parametrize("provider", ["openai"])
+def test_openai_calls_the_loop_must_answer_itself(run, repo):
+    """No SDK runner checks these on OpenAI: arguments that are not JSON, or not an
+    object, and a tool that does not exist come back as errors, and the run goes on."""
+    calls = [
+        tool_use("get_git_log", '{"range": ', id="c1"),
+        tool_use("get_git_log", "[1, 2]", id="c2"),
+        tool_use("no_such_tool", {}, id="c3"),
+    ]
+
+    def script(request, turn):
+        if turn == 1:
+            return reply(*calls, stop_reason="tool_use")
+        return reply(text(answer(repo)))
+
+    diagnosis, fake = run(script)
+    results = fake.tool_results(2)
+    assert all(r["is_error"] for r in results.values())
+    assert "arguments not JSON" in results["c1"]["content"]
+    assert "not a JSON object" in results["c2"]["content"]
+    assert "no tool named 'no_such_tool'" in results["c3"]["content"]
+    assert diagnosis["verdict"] == "regression"
+
+
+@pytest.mark.parametrize("provider", ["openai"])
+def test_an_openai_response_incomplete_for_another_reason_is_inconclusive(run, repo):
+    diagnosis, fake = run(
+        lambda r, t: reply(text(answer(repo)), incomplete="content_filter")
+    )
+    assert len(fake.requests) == 1
+    assert diagnosis["verdict"] == "inconclusive"
+    assert any("incomplete (content_filter)" in c for c in diagnosis["caveats"])
+
+
+@pytest.mark.parametrize("provider", ["openai"])
+def test_an_openai_response_that_failed_fails_the_run(run):
+    """The provider's own failure is not an answer, and not the model's to correct."""
+    failed = {"code": "server_error", "message": "try again"}
+    with pytest.raises(RunFailed, match="failed.*server_error"):
+        run(lambda r, t: reply(failed=failed))
+
+
 def test_the_model_is_shown_no_path(run, repo, tiny_trace):
     _, fake = run(lambda request, turn: reply(text(answer(repo))))
     sent = json.dumps(fake.requests[0])
     for path in (tiny_trace, repo["path"]):
         assert str(path) not in sent
         assert path.name not in sent
-    assert repo["range"] in fake.requests[0]["messages"][0]["content"]
+    assert repo["range"] in fake.first_message()
 
 
 def test_the_range_is_shown_as_shas_never_as_names(run, repo):
@@ -245,7 +393,7 @@ def test_the_range_is_shown_as_shas_never_as_names(run, repo):
     _, fake = run(
         lambda request, turn: reply(text(answer(repo))), git_range=f"{base}..main"
     )
-    first = fake.requests[0]["messages"][0]["content"]
+    first = fake.first_message()
     assert f"`{base}..{head}`" in first
     assert "main" not in first
 
@@ -268,7 +416,7 @@ def test_a_named_metric_is_passed_on_and_measured(run, repo, trace_processor):
         metric="startup_ttid_ms",
         binary=trace_processor,
     )
-    assert "startup_ttid_ms" in fake.requests[0]["messages"][0]["content"]
+    assert "startup_ttid_ms" in fake.first_message()
     assert diagnosis["metric"]["name"] == "startup_ttid_ms"
     assert diagnosis["verification"]["metric_dropped"] is None
 
@@ -309,10 +457,29 @@ def test_a_missing_trace_is_refused_before_any_request(run, tmp_path):
         run(_no_model, current=tmp_path / "absent.perfetto-trace")
 
 
-def test_a_model_with_no_price_is_refused_before_any_request(run):
-    """ADR-0020: every run records its cost, so a model with no price row cannot run."""
-    with pytest.raises(UnpricedModel, match="claude-opus-5-5"):
-        run(_no_model, model="claude-opus-5")
+def test_a_model_with_no_price_is_refused_before_any_request(run, provider):
+    """ADR-0020: every run records its cost, so a model with no price row cannot run.
+    The error names the priced models on that provider."""
+    with pytest.raises(UnpricedModel, match=DEFAULT_MODELS[provider]):
+        run(_no_model, model="some-other-model")
+
+
+def test_a_model_on_the_wrong_provider_is_refused_before_any_request(run, provider):
+    other = next(m for p, m in DEFAULT_MODELS.items() if p != provider)
+    with pytest.raises(ModelRefused, match=f"not {provider}"):
+        run(_no_model, model=other)
+
+
+def test_an_effort_the_model_lacks_is_refused_before_any_request(run):
+    """Never rounded to a nearby level: a cost row means the level it names."""
+    with pytest.raises(ModelRefused, match="no effort 'max'; it has low, medium"):
+        run(_no_model, effort="max")
+
+
+def test_the_default_is_openai_gpt_5_6_luna():
+    """ADR-0020: the default flips to OpenAI when its path ships (#43)."""
+    assert DEFAULT_PROVIDER == "openai"
+    assert DEFAULT_MODELS[DEFAULT_PROVIDER] == "gpt-5.6-luna"
 
 
 # --- The tools, as the model calls them -----------------------------------------------
@@ -398,7 +565,39 @@ def test_usd_prices_each_kind_of_token():
         "cache_read_input_tokens": 1_000_000,
         "cache_creation_input_tokens": 1_000_000,
     }
-    assert usd(MODEL, usage) == 4.00 + 20.00 + 0.20 + 5.00
+    assert usd("claude-opus-5-5", usage) == pytest.approx(4.00 + 20.00 + 0.20 + 5.00)
+    # 3M input tokens is above gpt-5.6-luna's 272K line: the long-context prices.
+    assert usd("gpt-5.6-luna", usage) == pytest.approx(0.40 + 1.80 + 0.04 + 0.50)
+
+
+def test_openai_usage_splits_a_recorded_response_s_input():
+    """A real `gpt-5.6-luna` response's usage (ADR-0023): 3,879 input tokens, of which
+    3,863 read from the cache and 13 written to it. What is left is uncached."""
+    recorded = SimpleNamespace(
+        input_tokens=3879,
+        input_tokens_details=SimpleNamespace(cached_tokens=3863, cache_write_tokens=13),
+        output_tokens=5,
+    )
+    assert usage_of(recorded) == {
+        "input_tokens": 3,
+        "output_tokens": 5,
+        "cache_read_input_tokens": 3863,
+        "cache_creation_input_tokens": 13,
+    }
+
+
+def test_gpt_5_6_luna_s_long_context_price_is_per_request_by_whole_input():
+    """The line is the request's whole input, cached or not; under it, the standard
+    prices."""
+    under = {
+        "input_tokens": 100_000,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 172_000,
+        "cache_creation_input_tokens": 0,
+    }
+    over = {**under, "cache_read_input_tokens": 172_001}
+    assert usd("gpt-5.6-luna", under) == pytest.approx(0.02 + 172_000 * 0.02 / 1e6)
+    assert usd("gpt-5.6-luna", over) == pytest.approx(0.04 + 172_001 * 0.04 / 1e6)
 
 
 # --- End to end, offline: a scripted model on a real case -----------------------------
@@ -422,7 +621,9 @@ def staged_case(tmp_path_factory):
     return inputs.stage(tmp_path_factory.mktemp("staged") / "run")
 
 
-def test_offline_end_to_end_on_a_real_case(staged_case, trace_processor, tmp_path):
+def test_offline_end_to_end_on_a_real_case(
+    staged_case, trace_processor, tmp_path, provider
+):
     """The closest offline stand-in for a live run: a scripted model calls the real
     tools on the staged case, and answers with claims citing the SQL they returned
     and a commit in the range. Every claim survives the verifier, and the metric in
@@ -511,8 +712,9 @@ def test_offline_end_to_end_on_a_real_case(staged_case, trace_processor, tmp_pat
             "caveats": ["emulator capture"],
         }
 
-    fake = FakeModel(script)
+    fake = FAKES[provider](script)
     diagnosis = diagnose(
+        provider=provider,
         baseline=case.baseline,
         current=case.current,
         repo=case.repo,

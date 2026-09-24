@@ -213,7 +213,16 @@ def test_a_good_diagnosis_passes_untouched(run_verify, repo):
     )
     before = copy.deepcopy(out)
     result = run_verify(
-        out, run={"tool_calls": 3, "usage": _usage(), "usd": 0.5, "wall_time_s": 9.0}
+        out,
+        run={
+            "provider": "openai",
+            "model": "gpt-5.6-luna",
+            "effort": "high",
+            "tool_calls": 3,
+            "usage": _usage(),
+            "usd": 0.5,
+            "wall_time_s": 9.0,
+        },
     )
 
     assert out == before, "verify must not modify its input"
