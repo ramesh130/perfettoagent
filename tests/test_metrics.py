@@ -110,6 +110,42 @@ def test_a_keyed_metric_is_one_sql_file(library, trace_processor, tiny_trace):
     assert all(row["baseline"] is None for row in breakdown["rows"])
 
 
+def test_a_null_value_is_reported_as_no_data(library, trace_processor, tiny_trace):
+    # NULL is not 0: the result names each side whose value is NULL, and why, from the
+    # file's @no_data line, or a generic reason for a file without one (ADR-0014).
+    header = "-- @description: x\n-- @unit: y\n-- @requires_baseline: false\n"
+    select = "SELECT (SELECT sum(dur) FROM slice WHERE name = 'absent') AS value\n"
+    _write(library, "with_reason", header + "-- @no_data: nothing absent\n" + select)
+    _write(library, "without_reason", header + select)
+
+    result = compute_metric(
+        "with_reason", baseline=tiny_trace, current=tiny_trace, binary=trace_processor
+    )
+    assert (result["baseline"], result["current"], result["delta"]) == (None,) * 3
+    assert result["no_data"] == {
+        "baseline": "nothing absent",
+        "current": "nothing absent",
+    }
+    alone = compute_metric("without_reason", current=tiny_trace, binary=trace_processor)
+    assert alone["no_data"] == {"current": metrics._NO_DATA}
+    # The listing is unchanged by it: the description says when a metric reads NULL.
+    assert "no_data" not in list_metrics()[0]
+
+
+def test_a_value_carries_no_no_data(library, trace_processor, tiny_trace):
+    _write(
+        library,
+        "zero",
+        "-- @description: x\n-- @unit: y\n-- @requires_baseline: false\n"
+        "-- @no_data: never\n"
+        "SELECT 0 AS value\n",
+    )
+    result = compute_metric("zero", current=tiny_trace, binary=trace_processor)
+    # A measured 0 is a value, and the side with no trace given is not missing data.
+    assert result["current"] == 0
+    assert "no_data" not in result
+
+
 @pytest.mark.parametrize(
     ("text", "error"),
     [
