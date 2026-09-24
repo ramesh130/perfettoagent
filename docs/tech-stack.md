@@ -19,7 +19,8 @@ this file, first record an ADR in `docs/adr/`.
 ## Model and SDK
 
 - **Anthropic Python SDK**, beta Tool Runner (`client.beta.messages.tool_runner` with
-  `@beta_tool`). Don't hand-write the `stop_reason == "tool_use"` loop in v1.
+  `@beta_tool`). Don't hand-write the `stop_reason == "tool_use"` loop in v1. Each tool's
+  schema is written by hand and passed to `beta_tool` unchanged, not generated (ADR-0018).
 - **Model `claude-opus-5-5`** (ADR-0001), with no date suffix. Adaptive thinking is on.
   `output_config.effort` defaults to `high`. A CLI flag sweeps `low`, `medium`, `high` and
   `xhigh` for the cost table.
@@ -55,7 +56,9 @@ this file, first record an ADR in `docs/adr/`.
 ## Agent tool surface and limits
 
 Every tool is a Python function with a strict JSON schema (`strict: true`,
-`additionalProperties: false`). Each description says what the tool *cannot* tell the model.
+`additionalProperties: false`), declared together as a `perfettoagent.tools.Tool` (ADR-0018).
+Each description says what the tool *cannot* tell the model. A cap is the default and the
+ceiling, and each capped result says whether it was cut and gives the true total.
 
 | Tool | Limit / rule |
 |---|---|
@@ -64,8 +67,8 @@ Every tool is a Python function with a strict JSON schema (`strict: true`,
 | `compute_metric(name)` | Returns the `sql_used` so the model can cite it. A per-key metric also returns at most 40 breakdown rows, and each one has its own `sql_used` (ADR-0005). A value the trace has no data for is `null`, with a `no_data` reason, never 0 (ADR-0014). |
 | `get_git_log(range, paths)` | At most **200 commits**. |
 | `get_git_diff(sha, path, max_lines=400)` | Reports when output was truncated. |
-| `git_blame(path, line_start, line_end, at)` | |
-| `grep_repo(pattern, paths, max_hits=100)` | Implemented with `git grep`. |
+| `git_blame(path, line_start, line_end, at)` | At most **200 lines** (ADR-0018). |
+| `grep_repo(pattern, paths, max_hits=100, at)` | Implemented with `git grep`, on commit `at`, never the working tree (ADR-0018). |
 | `symbolize(frame)` | Java/Kotlin only, using `stack_profile_*` tables and `--mapping`. Returns `null` for native frames. |
 | `read_run_metadata()` | Available only when `--run-json` was passed. |
 
