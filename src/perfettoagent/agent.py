@@ -34,7 +34,7 @@ from typing import Any
 import anthropic
 import openai
 
-from perfettoagent import models
+from perfettoagent import models, run_metadata
 from perfettoagent.anthropic_loop import AnthropicLoop
 from perfettoagent.credentials import api_key
 from perfettoagent.diagnosis import (
@@ -126,6 +126,7 @@ def diagnose(
     provider: str = models.DEFAULT_PROVIDER,
     model: str | None = None,
     effort: str = models.DEFAULT_EFFORT,
+    metadata: dict | None = None,
 ) -> dict:
     """Runs the agent on one trace pair and one range, and returns `diagnosis.json`
     (DIAGNOSIS_SCHEMA) as `verify` left it.
@@ -135,11 +136,14 @@ def diagnose(
     `client` is that provider's SDK client (default: one built with the key from the
     environment or `.env`, credentials.api_key). `binary` is the trace processor
     (default: the pinned one) and `cache_dir` where verified query results are kept
-    (ADR-0006).
+    (ADR-0006). `metadata` is the current capture's run metadata
+    (`run_metadata.load`), or None: with it, the model gets `read_run_metadata`, and
+    a dirty tree or a debuggable build becomes a caveat (ADR-0025).
 
     Raises, before any request: ModelRefused for a model with no price, on the wrong
     provider or at an effort it lacks,
     FileNotFoundError for a missing trace, RangeError for a range verify would refuse,
+    RunMetadataInvalid for run metadata whose commit is outside the range,
     UnknownMetric for a metric not in the library, and TraceProcessorError when there
     is no trace processor. During the run: the SDK's API errors, RunFailed, and
     DiagnosisInvalid if the model's answer does not match OUTPUT_SCHEMA; nothing is
@@ -155,6 +159,8 @@ def diagnose(
     # Shas, not the names given: a branch name can say what the range holds
     # (ADR-0022).
     git_range = check_range(repo, git_range)
+    if metadata is not None:
+        run_metadata.check(metadata, repo, git_range)
     if metric != AUTO and metric not in {m["name"] for m in metric_library()}:
         raise UnknownMetric(f"no metric named {metric!r}; see list_metrics")
     binary = binary or resolve_trace_processor()
@@ -163,11 +169,18 @@ def diagnose(
 
     context = TraceContext(traces=traces, binary=binary)
     bound = [(t, context) for t in TRACE_TOOLS] + [(t, Path(repo)) for t in REPO_TOOLS]
+    if metadata is not None:
+        bound.append((run_metadata.READ_RUN_METADATA, metadata))
     loop = LOOPS[provider](client, model, effort, bound)
     ending = loop.run(SYSTEM_PROMPT, first_message(git_range, metric), OUTPUT_SCHEMA)
 
     output = _output_of(ending)
     output = _with_measured_metric(output, metric, context)
+    # Ours, not the model's: never left to the model to mention (ADR-0025).
+    output = {
+        **output,
+        "caveats": [*run_metadata.caveats(metadata), *output["caveats"]],
+    }
     run = {
         "provider": provider,
         "model": model,

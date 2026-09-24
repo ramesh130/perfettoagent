@@ -11,6 +11,7 @@ from perfettoagent import agent
 from perfettoagent.cli import main
 from perfettoagent.diagnosis import check_diagnosis
 from perfettoagent.report import render
+from perfettoagent.run_metadata import CAVEAT_DEBUGGABLE
 
 
 def test_main_without_command_prints_help(capsys):
@@ -159,6 +160,51 @@ def test_diagnose_refuses_an_out_path_the_report_would_overwrite(
     assert fake.requests == []
     assert not out.exists()
     assert "ends in .md" in capsys.readouterr().err
+
+
+def _run_json(tmp_path, commit, **overrides):
+    path = tmp_path / "run-meta.json"
+    value = {
+        "schema": 1,
+        "commit": commit,
+        "tree_dirty": False,
+        "debuggable": False,
+        "build_type": None,
+        "device": None,
+    }
+    path.write_text(json.dumps({**value, **overrides}))
+    return str(path)
+
+
+def test_diagnose_takes_run_json_and_heads_the_report_with_its_caveats(
+    cli_model, repo, tiny_trace, tmp_path
+):
+    cli_model(lambda request, turn: reply(text(answer(repo))))
+    out = tmp_path / "diagnosis.json"
+    run_json = _run_json(tmp_path, repo["sha"]["head"], debuggable=True)
+    assert diagnose_cli(repo, tiny_trace, out, "--run-json", run_json) == 0
+    assert json.loads(out.read_text())["caveats"][0] == CAVEAT_DEBUGGABLE
+    head = out.with_suffix(".md").read_text().splitlines()[:10]
+    assert "- **Current build:** debuggable; see Caveats" in head
+
+
+@pytest.mark.parametrize(
+    "commit, overrides, message",
+    [
+        ("base", {}, "is not inside the range"),
+        ("head", {"schema": 7}, "not run metadata schema 1"),
+    ],
+)
+def test_diagnose_rejects_bad_run_json_before_any_request(
+    cli_model, repo, tiny_trace, tmp_path, capsys, commit, overrides, message
+):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))))
+    out = tmp_path / "diagnosis.json"
+    run_json = _run_json(tmp_path, repo["sha"][commit], **overrides)
+    assert diagnose_cli(repo, tiny_trace, out, "--run-json", run_json) == 2
+    assert fake.requests == []
+    assert not out.exists()
+    assert message in capsys.readouterr().err
 
 
 def test_diagnose_writes_a_refusal_as_inconclusive(

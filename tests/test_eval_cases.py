@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 from conftest import LFS_POINTER
 
+from perfettoagent import run_metadata
 from perfettoagent.evalcases import (
     CASE_FILES,
     EVALS_DIR,
@@ -134,6 +135,29 @@ def test_a_case_directory_holds_its_inputs_and_nothing_else():
     for case_id in CASES:
         names = {p.name for p in (EVALS_DIR / "cases" / case_id).iterdir()}
         assert names == CASE_FILES, case_id
+
+
+def test_each_case_s_run_metadata_is_its_range_head_built_clean(checkouts):
+    """`diagnose --run-json` accepts it: schema 1, its commit inside the range (the
+    head, which is the current trace's build), and a clean tree (ADR-0025)."""
+    for case_id, repo in checkouts.items():
+        inputs = load_inputs(case_id)
+        metadata = run_metadata.load(inputs.run_metadata)
+        assert metadata["commit"] == inputs.range_head, case_id
+        assert metadata["tree_dirty"] is False, case_id
+        run_metadata.check(metadata, repo, f"{inputs.range_base}..{inputs.range_head}")
+
+
+def test_run_metadata_does_not_tell_planted_from_clean(answers):
+    """Apart from its commit, a planted case's run metadata is one a clean pair's
+    could be: devicelab's raw tree_dirty flag, true exactly for planted runs, is not
+    copied."""
+    seen = {"regression": set(), "no_regression": set()}
+    for case_id, answer in zip(CASES, answers, strict=True):
+        metadata = json.loads(load_inputs(case_id).run_metadata.read_text())
+        del metadata["commit"]
+        seen[answer["verdict"]].add(json.dumps(metadata, sort_keys=True))
+    assert seen["regression"] <= seen["no_regression"]
 
 
 def test_case_ids_are_opaque():
@@ -272,7 +296,7 @@ def test_the_scan_finds_a_named_plant(answers):
 def test_staged_paths_say_nothing(staged, answers):
     """What the model is handed lives where the runner put it, named for its role."""
     for case_id, case in staged.items():
-        for path in (case.repo, case.baseline, case.current):
+        for path in (case.repo, case.baseline, case.current, case.run_metadata):
             assert "evals" not in path.parts and case_id not in str(path), path
             assert hints_in(path.name, answers) == [], path
         assert case.baseline.read_bytes()[:2] in (b"\x1f\x8b", LFS_POINTER[:2])
@@ -282,7 +306,9 @@ def test_no_model_visible_input_hints_at_the_plant(answers):
     for case_id in CASES:
         assert hints_in(case_id, answers) == []
         directory = EVALS_DIR / "cases" / case_id
-        assert hints_in((directory / "inputs.json").read_text(), answers) == [], case_id
+        for name in ("inputs.json", "run.json"):
+            text = (directory / name).read_text()
+            assert hints_in(text, answers) == [], (case_id, name)
         for path in directory.iterdir():
             assert hints_in(path.name, answers) == [], path
 

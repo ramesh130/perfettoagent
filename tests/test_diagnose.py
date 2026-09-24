@@ -37,6 +37,12 @@ from perfettoagent.models import (
 )
 from perfettoagent.openai_loop import usage_of
 from perfettoagent.repo_tools import REPO_TOOLS
+from perfettoagent.run_metadata import (
+    CAVEAT_DEBUGGABLE,
+    CAVEAT_DIRTY,
+    RunMetadataInvalid,
+)
+from perfettoagent.run_metadata import load as load_run_metadata
 from perfettoagent.trace_tools import TRACE_TOOLS
 from perfettoagent.verify import RangeError
 
@@ -457,6 +463,54 @@ def test_a_missing_trace_is_refused_before_any_request(run, tmp_path):
         run(_no_model, current=tmp_path / "absent.perfetto-trace")
 
 
+def _metadata(commit: str, **overrides) -> dict:
+    return {
+        "schema": 1,
+        "commit": commit,
+        "tree_dirty": False,
+        "debuggable": False,
+        "build_type": None,
+        "device": None,
+        **overrides,
+    }
+
+
+def test_run_metadata_outside_the_range_is_refused_before_any_request(run, repo):
+    with pytest.raises(RunMetadataInvalid, match="not inside the range"):
+        run(_no_model, metadata=_metadata(repo["sha"]["base"]))
+
+
+def test_read_run_metadata_is_offered_only_with_run_metadata(run, repo):
+    def names(fake):
+        return {t["name"] for t in fake.requests[0]["tools"]}
+
+    _, without = run(lambda request, turn: reply(text(answer(repo))))
+    assert "read_run_metadata" not in names(without)
+
+    given = _metadata(repo["sha"]["head"], build_type="release")
+
+    def script(request, turn):
+        if turn == 1:
+            return reply(tool_use("read_run_metadata", {}), stop_reason="tool_use")
+        return reply(text(answer(repo)))
+
+    diagnosis, fake = run(script, metadata=given)
+    assert "read_run_metadata" in names(fake)
+    [result] = fake.tool_results(2).values()
+    assert result["content"] == given
+    assert diagnosis["caveats"] == ["one capture per side"]
+
+
+def test_a_dirty_or_debuggable_build_is_a_caveat_the_model_cannot_omit(run, repo):
+    given = _metadata(repo["sha"]["head"], tree_dirty=True, debuggable=True)
+    diagnosis, _ = run(lambda request, turn: reply(text(answer(repo))), metadata=given)
+    assert diagnosis["caveats"] == [
+        CAVEAT_DIRTY,
+        CAVEAT_DEBUGGABLE,
+        "one capture per side",
+    ]
+
+
 def test_a_model_with_no_price_is_refused_before_any_request(run, provider):
     """ADR-0020: every run records its cost, so a model with no price row cannot run.
     The error names the priced models on that provider."""
@@ -722,6 +776,8 @@ def test_offline_end_to_end_on_a_real_case(
         client=fake.client,
         binary=trace_processor,
         cache_dir=tmp_path / "cache",
+        # As the eval runner passes it: the case's sanitised run metadata.
+        metadata=load_run_metadata(case.run_metadata),
     )
     # The tools answered for real, with no errors.
     log = fake.tool_results(2)["log"]
@@ -745,6 +801,8 @@ def test_offline_end_to_end_on_a_real_case(
     }
     assert diagnosis["metric"]["delta"] > 0
     assert diagnosis["run"]["tool_calls"] == 4
+    # A benchmark build from the range's head, clean: nothing to caveat.
+    assert diagnosis["caveats"] == ["emulator capture"]
     # Nothing the model was sent names the case, the eval tree or the plant.
     sent = json.dumps(fake.requests)
     assert CASE not in sent

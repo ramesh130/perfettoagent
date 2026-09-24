@@ -8,8 +8,8 @@ This is the only code that reads superPlayer, and it runs by hand, never from a 
 
 - `evals/repos/superplayer.bundle`: the fixture repo, one branch per case, named by case
   id.
-- `evals/cases/<id>/`: what the model sees. The two traces and `inputs.json` (the
-  range).
+- `evals/cases/<id>/`: what the model sees. The two traces, `inputs.json` (the
+  range) and `run.json`, the current trace's run metadata, sanitised (`run_metadata`).
 - `evals/answers/<id>.json` and `evals/answers/patches/`: what the model must not see.
 
 Each case's history starts at a snapshot of the exact superPlayer commit its baseline
@@ -866,7 +866,7 @@ def main() -> int:
             built[case.id] = build_history(repo, superplayer, case)
 
         if args.check:
-            return check(built)
+            return check(built, superplayer)
 
         BUNDLE.parent.mkdir(parents=True, exist_ok=True)
         repo.git("bundle", "create", "-q", str(BUNDLE), "--branches")
@@ -886,6 +886,7 @@ def write_case(repo: Repo, superplayer: Path, case: Case, base, head, culprit) -
         )
     inputs = {"schema": 1, "repo": "superplayer", "range": {"base": base, "head": head}}
     _write_json(directory / "inputs.json", inputs)
+    _write_json(directory / "run.json", run_metadata(superplayer, case, head))
 
     patch = None
     if case.plant is not None:
@@ -915,7 +916,33 @@ def write_case(repo: Repo, superplayer: Path, case: Case, base, head, culprit) -
     _write_json(ANSWERS / f"{case.id}.json", answer)
 
 
-def check(built: dict) -> int:
+def run_metadata(superplayer: Path, case: Case, head: str) -> dict:
+    """The current trace's run metadata as the model may see it (ADR-0025): the facts
+    of devicelab's run.json that say nothing about the plant.
+
+    `commit` is the range's head, not the superPlayer commit, which is in no case's
+    history: the head is the build's app source (ADR-0015). `tree_dirty` is false for
+    the same reason. devicelab's own flag is true exactly for the planted runs, whose
+    plant sat uncommitted in the tree, so copying it would name the answer."""
+    run = json.loads(
+        (superplayer / case.current).parent.joinpath("run.json").read_text()
+    )
+    device = run["device"]
+    return {
+        "schema": 1,
+        "commit": head,
+        "tree_dirty": False,
+        "debuggable": run["demo"]["debuggable"],
+        "build_type": run["demo"]["build_type"],
+        "device": {
+            "model": device["model"],
+            "sdk": device["sdk"],
+            "emulator": device["emulator"],
+        },
+    }
+
+
+def check(built: dict, superplayer: Path) -> int:
     """Every case's range and culprit as committed, from a rebuild: 0 when they
     match."""
     stale = []
@@ -923,14 +950,17 @@ def check(built: dict) -> int:
         base, head, culprit = built[case.id]
         inputs = json.loads((CASES / case.id / "inputs.json").read_text())
         answer = json.loads((ANSWERS / f"{case.id}.json").read_text())
+        metadata = json.loads((CASES / case.id / "run.json").read_text())
         if (
             inputs["range"] != {"base": base, "head": head}
             or answer["culprit"] != culprit
+            or metadata != run_metadata(superplayer, case, head)
         ):
             stale.append(case.id)
     for case_id in stale:
         print(
-            f"{case_id}: rebuilt range differs from the committed one", file=sys.stderr
+            f"{case_id}: rebuilt range or run.json differs from the committed one",
+            file=sys.stderr,
         )
     return 1 if stale else 0
 

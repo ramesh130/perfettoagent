@@ -8,7 +8,7 @@ from pathlib import Path
 import anthropic
 import openai
 
-from perfettoagent import models
+from perfettoagent import models, run_metadata
 from perfettoagent.agent import AUTO, diagnose
 from perfettoagent.credentials import redact
 from perfettoagent.diagnosis import DiagnosisInvalid
@@ -68,6 +68,14 @@ def build_parser() -> argparse.ArgumentParser:
         + ")",
     )
     dx.add_argument(
+        "--run-json",
+        type=Path,
+        help=(
+            "the current capture's run metadata (schema 1): its commit must be inside "
+            "--range; a dirty tree or a debuggable build becomes a caveat"
+        ),
+    )
+    dx.add_argument(
         "--out",
         type=Path,
         default=Path("diagnosis.json"),
@@ -117,6 +125,7 @@ def _diagnose(args: argparse.Namespace) -> int:
         )
         return EXIT_REJECTED
     try:
+        metadata = run_metadata.load(args.run_json) if args.run_json else None
         diagnosis = diagnose(
             baseline=args.baseline,
             current=args.current,
@@ -125,6 +134,7 @@ def _diagnose(args: argparse.Namespace) -> int:
             metric=args.metric,
             provider=args.provider,
             model=args.model,
+            metadata=metadata,
         )
     except (
         FileNotFoundError,
@@ -132,6 +142,7 @@ def _diagnose(args: argparse.Namespace) -> int:
         UnknownMetric,
         GitError,
         models.ModelRefused,
+        run_metadata.RunMetadataInvalid,
     ) as e:
         # Refused before any request: the inputs as given cannot be diagnosed.
         print(f"perfettoagent diagnose: rejected: {e}", file=sys.stderr)
