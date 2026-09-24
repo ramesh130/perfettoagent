@@ -16,6 +16,7 @@ from perfettoagent.git import GitError, GitUnavailable
 from perfettoagent.loop import RunFailed
 from perfettoagent.metrics import UnknownMetric
 from perfettoagent.query import MAX_ROWS, QueryRejected, query_trace
+from perfettoagent.report import render
 from perfettoagent.trace_processor import TraceProcessorError
 from perfettoagent.verify import RangeError
 
@@ -70,7 +71,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--out",
         type=Path,
         default=Path("diagnosis.json"),
-        help="where to write the diagnosis (default: diagnosis.json)",
+        help=(
+            "where to write the diagnosis (default: diagnosis.json); the report, "
+            "diagnosis.md, goes beside it with the suffix .md"
+        ),
     )
 
     tp = commands.add_parser(
@@ -104,6 +108,14 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _diagnose(args: argparse.Namespace) -> int:
+    if _report_path(args.out) == args.out:
+        # The report would overwrite the diagnosis it is rendered from.
+        print(
+            f"perfettoagent diagnose: rejected: --out {args.out} ends in .md, the "
+            "report's suffix; name the diagnosis .json",
+            file=sys.stderr,
+        )
+        return EXIT_REJECTED
     try:
         diagnosis = diagnose(
             baseline=args.baseline,
@@ -137,8 +149,14 @@ def _diagnose(args: argparse.Namespace) -> int:
         print(f"perfettoagent diagnose: {redact(str(e))}", file=sys.stderr)
         return EXIT_FAILED
     args.out.write_text(json.dumps(diagnosis, indent=2) + "\n")
+    _report_path(args.out).write_text(render(diagnosis))
     print(_summary(diagnosis, args.out))
     return EXIT_OK
+
+
+def _report_path(out: Path) -> Path:
+    """Where diagnosis.md goes: beside `out`, with the suffix .md."""
+    return out.with_suffix(".md")
 
 
 def _summary(diagnosis: dict, out: Path) -> str:

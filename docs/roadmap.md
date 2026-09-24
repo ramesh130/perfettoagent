@@ -99,8 +99,9 @@ Build the Tool Runner loop, the frozen system prompt and structured output. #29 
 Anthropic loop, `diagnosis.json` and an offline end-to-end test (ADR-0022). #43 added the
 OpenAI loop and made `gpt-5.6-luna` the default; `--provider` and `--model` choose the
 model (ADR-0020). The done criterion below is met by a live `gpt-5.6-luna` run (ADR-0023).
-Still open: `diagnosis.md` (#30), the `--run-json` rules (#31) and an `--effort` flag
-(with #44's sweep). A live `claude-opus-5-5` run waits for an Anthropic key.
+#30 added `diagnosis.md`, rendered from the verified `diagnosis.json` (ADR-0024). Still
+open: the `--run-json` rules (#31) and an `--effort` flag (#49). A live `claude-opus-5-5`
+run waits for an Anthropic key.
 
 The prompt states the workflow: establish the metric delta, then localise it in the trace
 (thread, slice, span), then correlate it with the range, then blame.
@@ -117,6 +118,8 @@ Outputs:
   citations; caveats; `dropped_claims`; tool-call count; usage and USD; and wall time.
 - `diagnosis.md`, which leads with the verdict, then a metric table, then each claim followed
   by its evidence in a fenced block. A reader should get the point from the first ten lines.
+  A trace citation's evidence is its SQL and verified row count; schema 1 keeps no rows
+  (ADR-0024).
 - **Done when:** the first end-to-end diagnosis of the leak case passes the verifier.
 
 ### 8. [ ] Second app ([#34](https://github.com/ramesh130/perfettoagent/issues/34) plants and captures, [#35](https://github.com/ramesh130/perfettoagent/issues/35) cases)

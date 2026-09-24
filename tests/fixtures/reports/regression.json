@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.class_aggregation;\nSELECT SUM(obj_count) AS objects FROM android_heap_graph_class_aggregation"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "6efb841e56d8a1b2c3d4e5f60718293a4b5c6d7e",
+    "files": [
+      "app/src/main/java/com/example/Feed.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c0",
+      "text": "Reachable FeedListener objects grew from 12 to 2,196.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT name, obj_count FROM android_heap_graph_class_aggregation WHERE name LIKE '%FeedListener%'",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT name, obj_count FROM android_heap_graph_class_aggregation WHERE name LIKE '%FeedListener%'",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c1",
+      "text": "The commit registers a listener on every bind\nand never removes it.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8",
+          "path": "app/src/main/java/com/example/Feed.kt",
+          "commit": "6efb841e56d8a1b2c3d4e5f60718293a4b5c6d7e",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "One capture per side, on an emulator."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c2",
+      "text": "A second commit also leaks.",
+      "reason": "citation 1: 6efb841e2797 names no commit in the repo (or is ambiguous)",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e2797",
+          "path": null,
+          "commit": null,
+          "error": "6efb841e2797 names no commit in the repo (or is ambiguous)"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 6,
+    "citations_passed": 5,
+    "wall_time_s": 0.4
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "tool_calls": 40,
+    "usage": {
+      "input_tokens": 33,
+      "output_tokens": 8663,
+      "cache_read_input_tokens": 221104,
+      "cache_creation_input_tokens": 44528
+    },
+    "usd": 0.023117,
+    "wall_time_s": 136.2
+  }
+}

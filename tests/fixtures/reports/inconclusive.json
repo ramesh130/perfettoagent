@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "verdict": "inconclusive",
+  "confidence": null,
+  "culprit": null,
+  "metric": null,
+  "claims": [],
+  "caveats": [
+    "A single capture per side, on an emulator."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c0",
+      "text": "Frames got slower.",
+      "reason": "citation 1: returned 0 rows",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT * FROM slice WHERE 0",
+          "row_count": 0,
+          "error": "returned 0 rows"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": "no claim survived verification: all 1 were dropped",
+    "culprit_dropped": "no surviving claim cites the culprit commit 1f2e3d4c5b6a",
+    "metric_dropped": "its sql_used on the baseline trace: returned 0 rows",
+    "citations_checked": 2,
+    "citations_passed": 0,
+    "wall_time_s": 0.1
+  },
+  "run": null
+}
