@@ -1,0 +1,27 @@
+diff --git a/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt b/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt
+index 57cafe7..f97a282 100644
+--- a/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt
++++ b/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt
+@@ -118,7 +118,12 @@ fun PostCardSimple(post: Post, navigateToPost: (String) -> Unit, isFavorite: Boo
+         }
+         BookmarkButton(
+             isBookmarked = isFavorite,
+-            onClick = onToggleFavorite,
++            onClick = {
++                onToggleFavorite()
++                // Held for a moment, so that a quick second tap lands after the bookmark has flipped
++                // rather than racing it and toggling it straight back.
++                Thread.sleep(BOOKMARK_HOLD_MS)
++            },
+             // Remove button semantics so action can be handled at row level
+             modifier = Modifier
+                 .clearAndSetSemantics {}
+@@ -127,6 +132,8 @@ fun PostCardSimple(post: Post, navigateToPost: (String) -> Unit, isFavorite: Boo
+     }
+ }
+ 
++private const val BOOKMARK_HOLD_MS = 120L
++
+ @Composable
+ fun PostCardHistory(post: Post, navigateToPost: (String) -> Unit) {
+     var openDialog by remember { mutableStateOf(false) }

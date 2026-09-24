@@ -38,6 +38,7 @@ select = ["E", "F", "I", "B", "UP"]
 # Its edits quote lines of Kotlin source verbatim, and a literal that must match the
 # source exactly cannot be wrapped.
 "evals/build_cases.py" = ["E501"]
+"evals/build_jetnews_cases.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

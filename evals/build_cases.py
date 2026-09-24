@@ -655,8 +655,12 @@ class Repo:
         ).stdout
 
     def snapshot(self, base: str) -> str:
-        self.git("read-tree", base)
-        self.git("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *EXCLUDED)
+        return self.without(base, EXCLUDED)
+
+    def without(self, tree: str, paths) -> str:
+        """`tree` less `paths`."""
+        self.git("read-tree", tree)
+        self.git("rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *paths)
         return self.git("write-tree").strip()
 
     def edit(self, tree: str, edit: Edit) -> str:
@@ -688,9 +692,11 @@ class Repo:
             self.git("update-index", "--cacheinfo", f"{mode},{blob},{path}")
         return self.git("write-tree").strip()
 
-    def patch(self, tree: str, patch: str) -> str:
+    def patch(self, tree: str, patch: str, strip: int = 1) -> str:
+        """`tree` with `patch` applied, `strip` leading path components removed from
+        its paths first (`git apply -p`)."""
         self.git("read-tree", tree)
-        self.git("apply", "--cached", "-", input=patch)
+        self.git("apply", "--cached", f"-p{strip}", "-", input=patch)
         return self.git("write-tree").strip()
 
     def commit(self, tree: str, parent: str | None, message: str, author, when) -> str:
@@ -756,11 +762,38 @@ def build_history(
     repo: Repo, superplayer: Path, case: Case
 ) -> tuple[str, str, str | None]:
     """The case's range (base, head) and its culprit, if it has one."""
-    rng = random.Random(case.id)
-    plant = PLANTS[case.plant] if case.plant else None
+    traces = [superplayer / t for t in (case.baseline, case.current)]
+    return lay_out_history(
+        repo,
+        superplayer,
+        case.id,
+        root_tree=repo.snapshot(case.base),
+        unseen=unseen_edits(case.id, case.edits, traces),
+        plant=PLANTS[case.plant] if case.plant else None,
+        captured=captured_on(case),
+        authors=AUTHORS,
+    )
+
+
+def lay_out_history(
+    repo: Repo,
+    source: Path,
+    case_id: str,
+    *,
+    root_tree: str,
+    unseen: list[Edit],
+    plant,
+    captured: datetime,
+    authors,
+) -> tuple[str, str, str | None]:
+    """A case's history, drawn from its id: the root commit `root_tree`, then neutral
+    commits drawn from `unseen`, some of them decoys, with `plant` (anything with a
+    `message` and `apply`) at a drawn position if there is one. It ends one to three
+    days before `captured`. Returns (base, head, culprit) and points `refs/heads/<id>`
+    at the head. Shared by both apps' builders."""
+    rng = random.Random(case_id)
     length = rng.randint(*RANGE_COMMITS)
     neutral = length - (1 if plant else 0)
-    unseen = unseen_edits(superplayer, case)
     decoys = [e for e in unseen if e.decoy]
     rest = [e for e in unseen if not e.decoy]
     drawn = rng.sample(decoys, min(len(decoys), rng.randint(*DECOYS_PER_CASE)))
@@ -771,19 +804,19 @@ def build_history(
 
     # Laid out backwards from the capture: the root, then one gap before each commit.
     gaps = [timedelta(minutes=rng.randrange(*COMMIT_GAP_MINUTES)) for _ in steps]
-    when = captured_on(case) - timedelta(days=rng.randint(*DAYS_BEFORE_CAPTURE))
+    when = captured - timedelta(days=rng.randint(*DAYS_BEFORE_CAPTURE))
     when -= sum(gaps, timedelta())
 
-    tree = repo.snapshot(case.base)
-    base = head = repo.commit(tree, None, "Initial import", rng.choice(AUTHORS), when)
+    tree = root_tree
+    base = head = repo.commit(tree, None, "Initial import", rng.choice(authors), when)
     culprit = None
     for step, gap in zip(steps, gaps, strict=True):
         when += gap
-        tree = step.apply(repo, tree, superplayer)
-        head = repo.commit(tree, head, step.message, rng.choice(AUTHORS), when)
+        tree = step.apply(repo, tree, source)
+        head = repo.commit(tree, head, step.message, rng.choice(authors), when)
         if step is plant:
             culprit = head
-    repo.git("update-ref", f"refs/heads/{case.id}", head)
+    repo.git("update-ref", f"refs/heads/{case_id}", head)
     return base, head, culprit
 
 
@@ -794,7 +827,7 @@ def captured_on(case: Case) -> datetime:
     return datetime.strptime(stamp, "%Y%m%d").replace(hour=12, tzinfo=UTC)
 
 
-def unseen_edits(superplayer: Path, case: Case) -> list[Edit]:
+def unseen_edits(case_id: str, edits, traces: list[Path]) -> list[Edit]:
     """The case's edits that neither of its traces could contradict.
 
     A trace records some of the source it was built from: a heap dump names classes and
@@ -804,18 +837,16 @@ def unseen_edits(superplayer: Path, case: Case) -> list[Edit]:
     moved lines in a file a trace cites by line, would end at code the trace does not
     match. An edit is left out of a case when either trace records the old name of
     anything it renames, or cites a file it changes by line number."""
-    seen = "\n".join(
-        _recorded(superplayer / trace) for trace in (case.baseline, case.current)
-    )
+    seen = "\n".join(_recorded(trace) for trace in traces)
     unseen = [
         e
-        for e in case.edits
+        for e in edits
         if not any(_word(old).search(seen) for _, old, _ in e.renames)
         and not any(f"{Path(path).name}:" in seen for path, _, _ in e.changes)
     ]
     if len(unseen) < max(RANGE_COMMITS):
         raise SystemExit(
-            f"{case.id}: only {len(unseen)} edits its traces cannot contradict"
+            f"{case_id}: only {len(unseen)} edits its traces cannot contradict"
         )
     return unseen
 
