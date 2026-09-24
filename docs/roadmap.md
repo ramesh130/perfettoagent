@@ -61,9 +61,9 @@ demo:
 | Regression | Plant | Expected metric |
 |---|---|---|
 | Main-thread I/O on startup | Synchronous file read in `Application.onCreate` (the patch adds the subclass; ADR-0007) | `startup_ttid_ms` |
-| Allocation storm | 50k small objects per frame in a scroll list | `jank_frames_pct`, `gc_time_ms` |
+| Allocation storm | 1M boxed floats in each scrolled frame's draw in the feed (ADR-0008) | `jank_frames_pct`, `gc_time_ms` |
 | Synchronous sleep | `Thread.sleep(120)` in a click handler | `main_thread_blocked_ms` |
-| Layout thrash | Forced re-measure of each visible item every frame in a Compose `LazyColumn` (ADR-0007) | `frame_p95_ms` |
+| Layout thrash | Forced re-measure of each visible item every frame in a Compose `LazyColumn`, with a width-fitted title (ADR-0007, ADR-0008) | `frame_p95_ms` |
 | Listener leak | devicelab's existing `resetForReuse` plant | `heap_growth_objects_by_class` |
 
 Also capture **clean pairs** (baseline against a second clean capture), at least as many as
