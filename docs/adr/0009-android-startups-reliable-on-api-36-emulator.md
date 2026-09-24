@@ -10,11 +10,13 @@ All eight startup captures from issue #5 (superPlayer PR #391) were checked on t
 |---|---|
 | Startups found | 160 of 160. Every run gives 20, all `package = com.superplayer.demo`, `startup_type = cold`. |
 | `android_startups.dur` against `am start -W` TotalTime | Within 1.09 ms on every launch. The mean absolute difference is 0.44–0.58 ms per run. |
-| TTID against logcat's `Displayed … +N ms` | TTID is 0.1–25.5 ms shorter on every launch, 2.9–5.5 ms on average per run. TTID ends when the app's RenderThread finishes its first frame, and `Displayed` ends later, when the window is shown. Nothing is off by a frame or more, except for single launches of up to 25.5 ms. |
+| TTID against logcat's `Displayed … +N ms` | TTID is 0.1–25.5 ms shorter on every launch, 2.9–5.5 ms on average per run. TTID ends when the app's RenderThread finishes its first frame, and `Displayed` ends later, when the window is shown. |
 | TTID and TTFD present | 160 of 160 each. |
-| TTFD against logcat's `Fully drawn … +N ms` | TTFD is 67–85 ms longer on average per run, ranging from −0.6 to +203 ms on a single launch. `Fully drawn` stops at the `reportFullyDrawn` call, and TTFD runs on to the end of the next frame, so it should be longer by about a frame or more. |
+| TTFD against logcat's `Fully drawn … +N ms` | TTFD is 67–85 ms longer on average per run, ranging from −0.6 to +203 ms on a single launch. `Fully drawn` stops at the `reportFullyDrawn` call, and TTFD runs on to the end of the next frame, so it should be longer. The one launch at −0.6 ms is within the sub-millisecond gap already seen between `dur` and `am start -W`. |
 
-Logcat is missing the first one or two launches of some runs, because it was cleared after they happened. Those launches were compared with `am start -W` only.
+The TTID gap is at most 25.5 ms, about a frame and a half at 60 Hz, on a single launch; per run it averages under 6 ms.
+
+Logcat has no line for the first one or two launches of some runs. Those launches were compared with `am start -W` only, and the logcat lines were matched to launches counting back from the last one.
 
 **Caveat:** TTID is NULL unless the trace also records `frametimeline`. PR #391's first pilot, without it, found every startup and no TTID at all. The TTID metric's description says so, so a NULL reads as a capture problem and not as a fast start.
 
@@ -42,7 +44,7 @@ Per-run values from the metric itself, in ms:
 
 ## TTFD does not separate this plant from clean runs
 
-The superPlayer demo calls `reportFullyDrawn` at its first video frame, so TTFD includes a network fetch. Its clean p50s span 609.83 ms, and the regressed runs fall inside that span: R2 (2675.63) is below B3 (2687.14). `startup_ttid_ms` is the metric that detects the main-thread I/O plant, as the roadmap's plant table expects. `startup_ttfd_ms` is shipped because a real alert may be on TTFD, but on this app a TTFD delta smaller than about 610 ms is within the noise of clean runs.
+The superPlayer demo calls `reportFullyDrawn` at its first video frame, so TTFD includes a network fetch. Its clean p50s span 609.83 ms, and a regressed run falls inside that span: R2 (2675.63) is below B3 (2687.14). `startup_ttid_ms` is the metric that detects the main-thread I/O plant, as the roadmap's plant table expects. `startup_ttfd_ms` is shipped because a real alert may be on TTFD, but on this app a TTFD delta smaller than about 610 ms is within the noise of clean runs.
 
 ## Consequences
 

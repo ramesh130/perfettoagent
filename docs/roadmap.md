@@ -28,7 +28,7 @@ Canned SQL, each tested against a fixture trace with a known answer.
 
 | Metric | Source | Needs baseline |
 |---|---|---|
-| `startup_ttid_ms`, `startup_ttfd_ms` | `android_startups`, `slice` | yes |
+| `startup_ttid_ms`, `startup_ttfd_ms` | `android_startups`, `android_startup_time_to_display` | yes |
 | `jank_frames_pct`, `frame_p95_ms`, `frame_p99_ms` | `actual_/expected_frame_timeline_slice` | yes |
 | `main_thread_blocked_ms` | `thread_state`, `slice` | no |
 | `binder_wait_ms` | `slice` (binder) | no |

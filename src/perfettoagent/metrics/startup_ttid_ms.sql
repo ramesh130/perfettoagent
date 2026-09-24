@@ -29,6 +29,12 @@
 -- capture (a launcher, a system app) must not be mixed into its distribution.
 --
 -- Starts with no TTID (no frame found) are left out of the median, not counted as 0.
+-- The stdlib finds the frame through android_frames, which is empty unless the trace
+-- recorded the frametimeline data source; without it every TTID is NULL.
+-- ref: https://perfetto.dev/docs/data-sources/frametimeline
+--
+-- Checked against every start's value, with the median taken in Python, on the
+-- fixtures in tests/test_metrics_startup.py.
 INCLUDE PERFETTO MODULE android.startup.startups;
 INCLUDE PERFETTO MODULE android.startup.time_to_display;
 WITH

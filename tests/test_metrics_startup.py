@@ -10,17 +10,16 @@ import math
 
 import pytest
 
+import perfettoagent.metrics as metrics
 from perfettoagent.metrics import compute_metric, list_metrics
 from perfettoagent.query import query_trace, split_includes
 
 TTID = "startup_ttid_ms"
 TTFD = "startup_ttfd_ms"
 
-# The stdlib modules both metrics stand on, as the first lines of their sql_used.
-MODULES = (
-    "INCLUDE PERFETTO MODULE android.startup.startups;\n"
-    "INCLUDE PERFETTO MODULE android.startup.time_to_display;\n"
-)
+# The stdlib modules both metrics stand on, and the first lines of their sql_used.
+MODULES = ["android.startup.startups", "android.startup.time_to_display"]
+INCLUDES = "".join(f"INCLUDE PERFETTO MODULE {m};\n" for m in MODULES)
 
 # What a meaningful change is: more than the run-to-run spread of the metric over clean
 # captures of one build. ADR-0009 measured it over all five clean captures of the
@@ -57,20 +56,29 @@ def test_both_startup_metrics_are_listed():
         assert "cold start" in entry["description"]
 
 
+def test_the_two_metrics_differ_only_in_their_column():
+    # The two files are one query over two columns, maintained by hand in step: this
+    # catches one being changed without the other.
+    library = metrics._load_library()
+    ttid, ttfd = library[TTID].sql, library[TTFD].sql
+    assert ttid.replace("time_to_initial_display", "time_to_full_display") == ttfd
+
+
 def test_ttid_known_answers(results):
     pair = results[(TTID, "current")]
     assert pair["unit"] == "ms"
-    assert pair["sql_used"].startswith(MODULES)
+    assert pair["sql_used"].startswith(INCLUDES)
     assert pair["baseline"] == pytest.approx(349.682708, abs=NS)
     assert pair["current"] == pytest.approx(664.881333, abs=NS)
     assert pair["delta"] == pytest.approx(315.198625, abs=NS)
     assert results[(TTID, "rerun")]["current"] == pytest.approx(345.470333, abs=NS)
+    # What the agent's tool returns must be JSON-serialisable.
     json.dumps(list(results.values()))
 
 
 def test_ttfd_known_answers(results):
     pair = results[(TTFD, "current")]
-    assert pair["sql_used"].startswith(MODULES)
+    assert pair["sql_used"].startswith(INCLUDES)
     assert pair["baseline"] == pytest.approx(2077.310959, abs=NS)
     assert pair["current"] == pytest.approx(2723.988335, abs=NS)
     assert results[(TTFD, "rerun")]["current"] == pytest.approx(2282.739626, abs=NS)
@@ -89,6 +97,14 @@ def test_the_clean_pair_shows_no_meaningful_delta(results):
     # ADR-0009 records that it does not separate the change from clean runs.
     assert abs(results[(TTID, "rerun")]["delta"]) < TTID_CLEAN_SPREAD_MS
     assert abs(results[(TTFD, "rerun")]["delta"]) < TTFD_CLEAN_SPREAD_MS
+    # And small beside the change itself: the spread above is measured over captures
+    # that include this pair, so it is also checked against the other pair's delta.
+    # A tenth leaves room for a noisier clean pair (the spread is a third of the change)
+    # while no clean pair could pass for the change.
+    assert (
+        abs(results[(TTID, "rerun")]["delta"])
+        < results[(TTID, "current")]["delta"] / 10
+    )
 
 
 @pytest.mark.parametrize(
@@ -107,7 +123,7 @@ def test_the_metric_is_the_nearest_rank_median_of_every_start(
             "FROM android_startups s "
             "JOIN android_startup_time_to_display d USING (startup_id)",
             trace,
-            modules=["android.startup.startups", "android.startup.time_to_display"],
+            modules=MODULES,
             binary=trace_processor,
         )["rows"]
         # One app, 20 cold starts, each with a value: nothing is filtered out here.
