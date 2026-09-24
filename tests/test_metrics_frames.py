@@ -71,9 +71,10 @@ KNOWN = {
 }
 
 # The same captures as read by the scenario's own report (superPlayer devicelab's
-# jank/sql/frames.sql and frame_work.sql, PR #392's capture table, to one decimal). It
-# reads the raw timeline table and the doFrame slices without this library's stdlib
-# tables, so it is an independent derivation of the same numbers.
+# jank/sql/frames.sql and frame_work.sql, PR #392's capture table, to one decimal).
+# Those queries read the raw timeline table and the doFrame slices without this
+# library's stdlib tables. Only their recorded output is copied in (nothing here runs
+# them), so this checks the known answers against a second derivation made by hand.
 DEVICELAB = {
     "baseline": {JANK: 54.7, P95: 81.5, P99: 154.5, UI_P95: 38.0},
     "rerun": {JANK: 42.2, P95: 72.3, P99: 123.5, UI_P95: 36.6},
@@ -81,6 +82,7 @@ DEVICELAB = {
     "current_c": {JANK: 80.3, P95: 92.7, P99: 124.1, UI_P95: 69.3},
 }
 
+# The captures compared against `baseline`.
 OTHERS = ("rerun", "current_b", "current_c")
 
 
@@ -158,9 +160,11 @@ def test_what_the_timeline_metrics_do_not_separate(results):
     # moves frame_p95_ms or frame_p99_ms by more than its clean spread, and current_b
     # moves jank_frames_pct by 11.8 points, less than the clean pair's own 12.5.
     for other in ("current_b", "current_c"):
-        assert results[(P95, other)]["delta"] < CLEAN_SPREAD[P95]
-        assert results[(P99, other)]["delta"] < CLEAN_SPREAD[P99]
-    assert results[(JANK, "current_b")]["delta"] < CLEAN_SPREAD[JANK]
+        assert abs(results[(P95, other)]["delta"]) < CLEAN_SPREAD[P95]
+        assert abs(results[(P99, other)]["delta"]) < CLEAN_SPREAD[P99]
+    jank_b = results[(JANK, "current_b")]["delta"]
+    assert jank_b < CLEAN_SPREAD[JANK]
+    assert jank_b < abs(results[(JANK, "rerun")]["delta"])
 
 
 def test_the_clean_pair_shows_no_meaningful_delta(results):
@@ -177,8 +181,10 @@ def test_the_clean_pair_shows_no_meaningful_delta(results):
 
 
 def _through_frames_cte(sql: str) -> str:
-    frames = sql.index("\n  frames AS (")
-    return sql[: sql.index("\n  )", frames)]
+    """The SQL up to the end of the `frames` CTE, which the four files share."""
+    start = sql.find("\n  frames AS (")
+    assert start >= 0, "a frame metric has no `frames` CTE at the expected indent"
+    return sql[: sql.index("\n  )", start)]
 
 
 def _nearest_rank(values, p):
@@ -209,7 +215,9 @@ def test_the_metrics_are_aggregated_from_every_frame(
         for upid, utid, layer, frame_id, dur, jank in rows
         if layer is not None and "SurfaceView" not in layer and dur > 0
     }
-    app, _ = Counter(upid for upid, _, _, _ in window.values()).most_common(1)[0]
+    # The process with the most frames, ties to the lowest upid, as the SQL breaks them.
+    counts = Counter(upid for upid, _, _, _ in window.values())
+    app = min(counts, key=lambda upid: (-counts[upid], upid))
     frames = [f for f in window.values() if f[0] == app]
     durs = [dur for _, _, dur, _ in frames]
     janky = [jank for _, _, _, jank in frames if "App Deadline Missed" in jank]

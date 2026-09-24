@@ -1,6 +1,6 @@
 # Four jank traces join the fixtures, and LFS now holds about 198 MB
 
-ADR-0010 asked each issue that adds fixtures to recheck the LFS total against the quota and record the new figure. The frame metrics (issue #8, ADR-0011) add four of superPlayer PR #392's fifteen jank captures, gzipped with `gzip -9 -n` as ADR-0010 requires. Affects `tests/fixtures/large/` and `tests/conftest.py`.
+ADR-0010 asked each issue that adds fixtures to recheck the LFS total against the quota and record the new figure. The frame metrics (issue #8, ADR-0011) add four of superPlayer PR #392's fifteen jank captures, gzipped with `gzip -9` as ADR-0010 requires, plus `-n` (below). Affects `tests/fixtures/large/` and `tests/conftest.py`.
 
 | Fixture | Capture | Raw | Gzipped |
 |---|---|---:|---:|
@@ -16,4 +16,4 @@ ADR-0010 asked each issue that adds fixtures to recheck the LFS total against th
 ## Consequences
 
 - **The LFS total is 197.9 MB** (197,903,119 bytes over nine files): 46.7 MB of heap dumps, 82.5 MB of startup traces and 68.7 MB of jank traces. The 1 GB monthly bandwidth quota now allows about 5 full fetches: CI runs, plus fresh clones with LFS. CI is still manual-only. The storage quota is 20% used.
-- A full fetch is now five times larger than when ADR-0004 was written. The next issue to add fixtures should first consider re-compressing the heap dumps, which would save about 37 MB (ADR-0010).
+- A full fetch is now over four times larger than when ADR-0004 was written. The next issue to add fixtures should first consider re-compressing the heap dumps, which would save about 37 MB (ADR-0010).

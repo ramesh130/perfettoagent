@@ -39,7 +39,7 @@ The runs are superPlayer PR #392's: six clean runs (B, C), and three each of the
 | S2 | 37.46 | 65.20 | 122.37 | 31.91 | 33.70 |
 | S3 | 41.95 | 71.78 | 130.27 | 34.31 | 33.04 |
 
-The **clean spread** is the largest minus the smallest value over the six clean runs. The gap is from the largest clean value to the smallest planted value; a negative gap means the plant overlaps the clean runs.
+The **clean spread** is the largest minus the smallest value over the six clean runs. The gap is from the largest clean value to the smallest planted value; a negative gap means the plant overlaps the clean runs. ADR-0008 gave layout thrash's p95 gap as 2.7 ms, from devicelab's `frames.sql`. That query counts every window timeline row, including the few with no doFrame and DrawFrame that the stdlib does not match (3 in R1), so R3's p95 reads 84.2 there and 84.00 here.
 
 | Metric | Clean spread | G gap | R gap |
 |---|---:|---:|---:|

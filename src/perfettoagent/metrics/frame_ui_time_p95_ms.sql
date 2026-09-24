@@ -11,6 +11,7 @@
 -- android_frames_ui_time defines it, over the doFrames the stdlib parses a vsync id
 -- from (the "resynced" ones are left out). That table has no thread or process column,
 -- so its source, android_frames_choreographer_do_frame, is read here instead.
+-- ref: https://github.com/google/perfetto/blob/v58.2/src/trace_processor/perfetto_sql/stdlib/android/frames/timeline.sql
 -- ref: https://perfetto.dev/docs/analysis/stdlib-docs#android-frames-timeline
 --
 -- The UI thread is the one whose doFrames drew the app's window frames. Other threads
