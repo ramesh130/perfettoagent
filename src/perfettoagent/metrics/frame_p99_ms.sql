@@ -5,8 +5,8 @@
 -- Everything above the first line that is not a comment is metadata (the @fields) or
 -- notes for whoever edits this file. What follows it is sql_used, verbatim. This file
 -- and frame_p95_ms.sql are the same query at a different rank. It shares its query
--- with all four frame metrics (jank_frames_pct, frame_p95_ms, frame_p99_ms,
--- frame_ui_time_p95_ms) down to the `frames` CTE: change them together, and see
+-- with the other frame and thread metrics down to the `frames` CTE (the list is in
+-- jank_frames_pct.sql): change them together, and see
 -- jank_frames_pct.sql for which frames are counted and why.
 --
 -- Nearest rank, the value at rank ceil(0.99 n), so the number is one real frame's

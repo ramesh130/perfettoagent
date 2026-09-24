@@ -5,8 +5,10 @@
 -- Everything above the first line that is not a comment is metadata (the @fields) or
 -- notes for whoever edits this file. What follows it is sql_used, verbatim. The four
 -- frame metrics (this file, frame_p95_ms.sql, frame_p99_ms.sql and
--- frame_ui_time_p95_ms.sql) share one query down to the `frames` CTE: change them
--- together. This file carries the argument, for all four, of which frames count.
+-- frame_ui_time_p95_ms.sql) share one query down to the `frames` CTE, and so do the
+-- thread metrics (main_thread_blocked_ms.sql, gc_time_ms.sql, binder_wait_ms.sql),
+-- which take their app from it (ADR-0013): change all seven together. This file
+-- carries the argument, for all of them, of which frames and app count.
 --
 -- Which frames. A frame is a row of the stdlib's android_frames_layers: one vsync of the
 -- app's UI thread (Choreographer#doFrame, then DrawFrame on its RenderThread), matched
