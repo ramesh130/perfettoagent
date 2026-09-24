@@ -50,7 +50,7 @@ from perfettoagent.metrics import list_metrics as metric_library
 from perfettoagent.openai_loop import OpenAILoop
 from perfettoagent.repo_tools import REPO_TOOLS
 from perfettoagent.symbolize import TraceContext
-from perfettoagent.trace_processor import resolve_trace_processor
+from perfettoagent.trace_processor import resolve_trace_processor, sha256_of
 from perfettoagent.trace_tools import TRACE_TOOLS
 from perfettoagent.verify import QUERY_CACHE_DIR, check_range, verify
 
@@ -185,6 +185,11 @@ def diagnose(
         "provider": provider,
         "model": model,
         "effort": effort,
+        "inputs": {
+            "baseline_sha256": sha256_of(traces["baseline"]),
+            "current_sha256": sha256_of(traces["current"]),
+            "range": git_range,
+        },
         "tool_calls": loop.cost.tool_calls,
         "usage": loop.cost.usage,
         "usd": round(loop.cost.usd, 6),

@@ -218,6 +218,11 @@ def test_a_good_diagnosis_passes_untouched(run_verify, repo):
             "provider": "openai",
             "model": "gpt-5.6-luna",
             "effort": "high",
+            "inputs": {
+                "baseline_sha256": "0" * 64,
+                "current_sha256": "1" * 64,
+                "range": "a" * 40 + ".." + "b" * 40,
+            },
             "tool_calls": 3,
             "usage": _usage(),
             "usd": 0.5,

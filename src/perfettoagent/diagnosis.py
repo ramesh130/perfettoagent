@@ -227,6 +227,15 @@ DIAGNOSIS_SCHEMA = _object(
             provider=_STRING,
             model=_STRING,
             effort=_STRING,
+            # What was diagnosed, by content: the traces' sha256 and the range as full
+            # shas. Never a path (ADR-0022). `review` records them with its answer
+            # (ADR-0026).
+            inputs=_object(
+                "The run's inputs, by content.",
+                baseline_sha256=_STRING,
+                current_sha256=_STRING,
+                range=_STRING,
+            ),
             tool_calls=_INTEGER,
             usage=_object(
                 "Tokens, summed over the run's requests.",
