@@ -120,8 +120,8 @@ clean pairs.
 - **Done when:** its cases are in `evals/cases/`.
 
 ### 9. [ ] Eval runner and results
-Use `evalharness` if Q2 allows it; otherwise write a local `evals/run_eval.py`. Run every case
-**three times** and sweep effort levels. Report:
+Write a local `evals/run_eval.py`, since `evalharness` cannot score these runs (Q2, ADR-0016).
+Run every case **three times** and sweep effort levels. Report:
 
 | Metric | Definition |
 |---|---|
@@ -151,8 +151,11 @@ Settle each one by recording an ADR in `docs/adr/`.
 
 1. **Q1.** Which open-source app builds fastest on Apple silicon with the API 36 emulator?
    Decide by trying, time-boxed to two hours. Blocks item 8.
-2. **Q2.** Does `evalharness` accept a per-case tool-call transcript as a quality input, or is
-   a local runner needed? Check its scorer interface first. Blocks item 9.
+2. **Q2.** ~~Does `evalharness` accept a per-case tool-call transcript as a quality input, or is
+   a local runner needed?~~
+   **Resolved (ADR-0016):** a local runner. Its scorer sees tool calls without their results
+   and returns one float per task, and it refuses repeated runs of a case. Item 9 writes
+   `evals/run_eval.py`.
 3. **Q3.** Should `--metric auto` ship in v1? Start with `auto`. If attribution drops more than
    10 points compared with a named metric, report both. Affects items 7 and 9.
 4. **Q4.** ~~Is the `android_startups` stdlib module reliable on API 36 emulator traces?~~
