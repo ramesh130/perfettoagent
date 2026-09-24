@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "gc_time_ms",
+    "unit": "ms",
+    "baseline": 258.575876,
+    "current": 13632.500926,
+    "delta": 13373.92505,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_garbage_collection_events) THEN NULL\n    ELSE coalesce((\n      SELECT sum(gc_dur) FROM android_garbage_collection_events\n      WHERE upid = (SELECT upid FROM app)\n    ), 0) / 1e6\n  END AS value\n"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "18fab3f92d84e00498a5a6891125dd23bd063820",
+    "files": [
+      "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt"
+    ],
+    "attribution": "correlated"
+  },
+  "claims": [
+    {
+      "id": "c2",
+      "text": "The app frame spans were similar\u201455.083096984 seconds in the baseline and 57.414479277 seconds in the current trace\u2014so the much larger GC total is not explained by a substantially longer capture.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.ts, a.dur, a.jank_type\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n)\nSELECT upid, count(*) AS frame_count, min(ts) / 1e9 AS first_frame_s,\n       max(ts + dur) / 1e9 AS last_frame_s,\n       (max(ts + dur) - min(ts)) / 1e9 AS frame_span_s\nFROM window_frames\nWHERE upid = (SELECT upid FROM app)\nGROUP BY upid",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.ts, a.dur, a.jank_type\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n)\nSELECT upid, count(*) AS frame_count, min(ts) / 1e9 AS first_frame_s,\n       max(ts + dur) / 1e9 AS last_frame_s,\n       (max(ts + dur) - min(ts)) / 1e9 AS frame_span_s\nFROM window_frames\nWHERE upid = (SELECT upid FROM app)\nGROUP BY upid",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The current GC is concentrated in com.superplayer.demo's HeapTaskDaemon, while the app's UI thread also shows substantially more Compose lazy-prefetch idle work: 34 slices totaling 1114.795252 ms versus 10 slices totaling 67.200875 ms in the baseline.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n)\nSELECT p.name AS process_name, t.name AS thread_name, count(*) AS gc_count,\n       sum(e.gc_dur) / 1e6 AS gc_ms,\n       min(e.gc_dur) / 1e6 AS min_gc_ms,\n       max(e.gc_dur) / 1e6 AS max_gc_ms\nFROM android_garbage_collection_events AS e\nJOIN process AS p USING (upid)\nLEFT JOIN thread AS t USING (utid)\nWHERE e.upid = (SELECT upid FROM app)\nGROUP BY p.name, t.name\nORDER BY gc_ms DESC",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n), main_thread AS (\n  SELECT DISTINCT ui_thread_utid AS utid FROM window_frames WHERE upid = (SELECT upid FROM app)\n)\nSELECT s.name, count(*) AS slice_count, sum(s.dur) / 1e6 AS total_ms,\n       max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nWHERE s.depth = 0 AND tt.utid IN (SELECT utid FROM main_thread)\n  AND s.name = 'compose:lazy:prefetch:idle_frame' AND s.dur > 0\nGROUP BY s.name",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n), main_thread AS (\n  SELECT DISTINCT ui_thread_utid AS utid FROM window_frames WHERE upid = (SELECT upid FROM app)\n)\nSELECT s.name, count(*) AS slice_count, sum(s.dur) / 1e6 AS total_ms,\n       max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nWHERE s.depth = 0 AND tt.utid IN (SELECT utid FROM main_thread)\n  AND s.name = 'compose:lazy:prefetch:idle_frame' AND s.dur > 0\nGROUP BY s.name",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The likely culprit is commit 18fab3f92d84e00498a5a6891125dd23bd063820: it adds an infinite per-row Compose breathing animation and a RowTitle implementation that repeatedly measures text while composing FeedScreen.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "18fab3f92d84e00498a5a6891125dd23bd063820",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "18fab3f92d84e00498a5a6891125dd23bd063820",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n), main_thread AS (\n  SELECT DISTINCT ui_thread_utid AS utid FROM window_frames WHERE upid = (SELECT upid FROM app)\n)\nSELECT s.name, count(*) AS slice_count, sum(s.dur) / 1e6 AS total_ms,\n       max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nWHERE s.depth = 0 AND tt.utid IN (SELECT utid FROM main_thread)\n  AND s.name = 'compose:lazy:prefetch:idle_frame' AND s.dur > 0\nGROUP BY s.name",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Only one capture is available for each side, so small performance changes could be run-to-run noise; this change is large enough to stand out but the attribution remains correlated rather than a direct sampled-code attribution.",
+    "The GC metric is whole-trace GC wall time, and the captures were made on an emulator."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c1",
+      "text": "App GC time increased from 258.575876 ms across 7 collections in the baseline to 13632.500926 ms across 203 collections in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.ts, a.dur, a.jank_type\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY count(*) ORDER BY count(*) DESC, upid LIMIT 1\n)\nSELECT count(*) AS gc_count, sum(gc_dur) / 1e6 AS gc_ms,\n       min(gc_ts) / 1e9 AS first_gc_s, max(gc_ts + gc_dur) / 1e9 AS last_gc_s,\n       (max(gc_ts + gc_dur) - min(gc_ts)) / 1e9 AS gc_span_s\nFROM android_garbage_collection_events\nWHERE upid = (SELECT upid FROM app)",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 18 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause"
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.ts, a.dur, a.jank_type\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n)\nSELECT count(*) AS gc_count, sum(gc_dur) / 1e6 AS gc_ms,\n       min(gc_ts) / 1e9 AS first_gc_s, max(gc_ts + gc_dur) / 1e9 AS last_gc_s,\n       (max(gc_ts + gc_dur) - min(gc_ts)) / 1e9 AS gc_span_s\nFROM android_garbage_collection_events\nWHERE upid = (SELECT upid FROM app)",
+          "row_count": 1,
+          "error": null
+        }
+      ],
+      "reason": "citation 1: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 18 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause"
+    }
+  ],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 9,
+    "citations_passed": 8,
+    "wall_time_s": 29.492
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "b99b711767a5773e604e8c16b300bc638c7cba6903ded19fd3f12b0bb27f0442",
+      "current_sha256": "dee5687860edcff5dac803c05174a7c0ec2188d7ed1257f7dd4558d33768dbfe",
+      "range": "224f09e79fc3966588bcbfaa7abf6b4e64fdb03f..fd9ffe92fb622daa6473022b204b1e13e41891cb"
+    },
+    "tool_calls": 53,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 13873,
+      "cache_read_input_tokens": 241278,
+      "cache_creation_input_tokens": 30547
+    },
+    "usd": 0.029118,
+    "wall_time_s": 339.689
+  }
+}

@@ -1,0 +1,390 @@
+{
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "effort": "high",
+  "metric": "auto",
+  "runs": 30,
+  "errors": 0,
+  "repetitions": [
+    1,
+    2,
+    3
+  ],
+  "cases": {
+    "planted": 5,
+    "clean": 5
+  },
+  "rates": {
+    "detection": {
+      "hits": 14,
+      "of": 15,
+      "rate": 0.9333333333333333,
+      "by_run": [
+        1.0,
+        0.8,
+        1.0
+      ],
+      "min": 0.8,
+      "max": 1.0
+    },
+    "attribution": {
+      "hits": 14,
+      "of": 14,
+      "rate": 1.0,
+      "by_run": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "min": 1.0,
+      "max": 1.0
+    },
+    "false_positive": {
+      "hits": 5,
+      "of": 15,
+      "rate": 0.3333333333333333,
+      "by_run": [
+        0.4,
+        0.2,
+        0.4
+      ],
+      "min": 0.2,
+      "max": 0.4
+    },
+    "citation_validity": {
+      "hits": 240,
+      "of": 257,
+      "rate": 0.933852140077821,
+      "by_run": [
+        0.9036144578313253,
+        0.9101123595505618,
+        0.9882352941176471
+      ],
+      "min": 0.9036144578313253,
+      "max": 0.9882352941176471
+    }
+  },
+  "per_case": [
+    {
+      "case": "275adbfb",
+      "expected": "regression",
+      "verdicts": [
+        "regression",
+        "regression",
+        "regression"
+      ],
+      "detected": [
+        true,
+        true,
+        true
+      ],
+      "attributed": [
+        true,
+        true,
+        true
+      ],
+      "false_positive": [
+        false,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": false
+    },
+    {
+      "case": "462439ff",
+      "expected": "regression",
+      "verdicts": [
+        "regression",
+        "regression",
+        "regression"
+      ],
+      "detected": [
+        true,
+        true,
+        true
+      ],
+      "attributed": [
+        true,
+        true,
+        true
+      ],
+      "false_positive": [
+        false,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": false
+    },
+    {
+      "case": "571fe43e",
+      "expected": "no_regression",
+      "verdicts": [
+        "inconclusive",
+        "inconclusive",
+        "regression"
+      ],
+      "detected": [
+        false,
+        false,
+        false
+      ],
+      "attributed": [
+        false,
+        false,
+        false
+      ],
+      "false_positive": [
+        false,
+        false,
+        true
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": true
+    },
+    {
+      "case": "65f39dfe",
+      "expected": "no_regression",
+      "verdicts": [
+        "regression",
+        "regression",
+        "regression"
+      ],
+      "detected": [
+        false,
+        false,
+        false
+      ],
+      "attributed": [
+        false,
+        false,
+        false
+      ],
+      "false_positive": [
+        true,
+        true,
+        true
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": false
+    },
+    {
+      "case": "69dc18c7",
+      "expected": "regression",
+      "verdicts": [
+        "regression",
+        "regression",
+        "regression"
+      ],
+      "detected": [
+        true,
+        true,
+        true
+      ],
+      "attributed": [
+        true,
+        true,
+        true
+      ],
+      "false_positive": [
+        false,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": false
+    },
+    {
+      "case": "b021c1fb",
+      "expected": "no_regression",
+      "verdicts": [
+        "no_regression",
+        "no_regression",
+        "no_regression"
+      ],
+      "detected": [
+        false,
+        false,
+        false
+      ],
+      "attributed": [
+        false,
+        false,
+        false
+      ],
+      "false_positive": [
+        false,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": false
+    },
+    {
+      "case": "c69ee38f",
+      "expected": "no_regression",
+      "verdicts": [
+        "no_regression",
+        "no_regression",
+        "no_regression"
+      ],
+      "detected": [
+        false,
+        false,
+        false
+      ],
+      "attributed": [
+        false,
+        false,
+        false
+      ],
+      "false_positive": [
+        false,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": false
+    },
+    {
+      "case": "c89d5055",
+      "expected": "regression",
+      "verdicts": [
+        "regression",
+        "regression",
+        "regression"
+      ],
+      "detected": [
+        true,
+        false,
+        true
+      ],
+      "attributed": [
+        true,
+        false,
+        true
+      ],
+      "false_positive": [
+        false,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": true
+    },
+    {
+      "case": "f21c443c",
+      "expected": "regression",
+      "verdicts": [
+        "regression",
+        "regression",
+        "regression"
+      ],
+      "detected": [
+        true,
+        true,
+        true
+      ],
+      "attributed": [
+        true,
+        true,
+        true
+      ],
+      "false_positive": [
+        false,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": false
+    },
+    {
+      "case": "f37266c8",
+      "expected": "no_regression",
+      "verdicts": [
+        "regression",
+        "no_regression",
+        "no_regression"
+      ],
+      "detected": [
+        false,
+        false,
+        false
+      ],
+      "attributed": [
+        false,
+        false,
+        false
+      ],
+      "false_positive": [
+        true,
+        false,
+        false
+      ],
+      "errors": [
+        null,
+        null,
+        null
+      ],
+      "flipped": true
+    }
+  ],
+  "cost": {
+    "usd": 0.969561,
+    "usd_per_run": 0.032319,
+    "usage": {
+      "input_tokens": 1173,
+      "output_tokens": 338384,
+      "cache_read_input_tokens": 10191297,
+      "cache_creation_input_tokens": 1437762
+    },
+    "usage_per_run": {
+      "input_tokens": 39.1,
+      "output_tokens": 11279.5,
+      "cache_read_input_tokens": 339709.9,
+      "cache_creation_input_tokens": 47925.4
+    },
+    "wall_time_s": {
+      "mean": 310.6,
+      "min": 153.545,
+      "max": 1008.839
+    }
+  }
+}

@@ -5,15 +5,11 @@ import json
 import sys
 from pathlib import Path
 
-import anthropic
-import openai
-
 from perfettoagent import models, run_metadata
-from perfettoagent.agent import AUTO, diagnose
+from perfettoagent.agent import AUTO, RUN_ERRORS, diagnose
 from perfettoagent.credentials import redact
-from perfettoagent.diagnosis import DiagnosisInvalid
-from perfettoagent.git import GitError, GitUnavailable
-from perfettoagent.loop import RunFailed
+from perfettoagent.evalrun import RESULTS_DIR, RUNS, results_name, run_eval
+from perfettoagent.git import GitError
 from perfettoagent.metrics import UnknownMetric
 from perfettoagent.query import MAX_ROWS, QueryRejected, query_trace
 from perfettoagent.report import render
@@ -111,6 +107,29 @@ def build_parser() -> argparse.ArgumentParser:
         "claim_ids", nargs="+", metavar="CLAIM_ID", help="the claims that are right"
     )
 
+    ev = commands.add_parser(
+        "eval",
+        help="run every eval case N times and score the runs",
+        description=(
+            "Stage each eval case, diagnose it --runs times, write each run's result "
+            "under --out, and score the runs against evals/answers/ (ADR-0027). A run "
+            "with a result already is not run again, so an interrupted run resumes. "
+            "Calls the model provider's API, like diagnose."
+        ),
+    )
+    ev.add_argument(
+        "--cases", nargs="+", metavar="CASE_ID", help="the cases to run (default: all)"
+    )
+    ev.add_argument(
+        "--runs", type=int, default=RUNS, help=f"runs per case (default: {RUNS})"
+    )
+    ev.add_argument("--jobs", type=int, default=1, help="runs at once (default: 1)")
+    ev.add_argument(
+        "--out",
+        type=Path,
+        help="the results directory (default: evals/results/<model>-<effort>-<metric>)",
+    )
+
     tp = commands.add_parser(
         "tp",
         help="run one SELECT on a trace through the pinned trace processor",
@@ -140,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
         return _diagnose(args)
     if args.command == "review":
         return _review(args)
+    if args.command == "eval":
+        return _eval(args)
     return _tp(args)
 
 
@@ -175,14 +196,7 @@ def _diagnose(args: argparse.Namespace) -> int:
         # Refused before any request: the inputs as given cannot be diagnosed.
         print(f"perfettoagent diagnose: rejected: {e}", file=sys.stderr)
         return EXIT_REJECTED
-    except (
-        anthropic.AnthropicError,
-        openai.OpenAIError,
-        DiagnosisInvalid,
-        RunFailed,
-        GitUnavailable,
-        TraceProcessorError,
-    ) as e:
+    except RUN_ERRORS as e:
         # Nothing is written: a diagnosis.json that exists has been verified. An API
         # error can quote part of the key it was sent; none is printed.
         print(f"perfettoagent diagnose: {redact(str(e))}", file=sys.stderr)
@@ -225,6 +239,35 @@ def _review(args: argparse.Namespace) -> int:
     print(
         f"{line['answer']}: {len(line['claims_accepted'])} claims accepted, "
         f"{len(line['claims_rejected'])} rejected -> {args.feedback}"
+    )
+    return EXIT_OK
+
+
+def _eval(args: argparse.Namespace) -> int:
+    if args.runs < 1 or args.jobs < 1:
+        print("perfettoagent eval: rejected: --runs and --jobs are at least 1",
+              file=sys.stderr)  # fmt: skip
+        return EXIT_REJECTED
+    provider, effort, metric = models.DEFAULT_PROVIDER, models.DEFAULT_EFFORT, AUTO
+    model = models.DEFAULT_MODELS[provider]
+    out = args.out or RESULTS_DIR / results_name(model, effort, metric)
+    scores = run_eval(
+        out,
+        cases=args.cases,
+        runs=args.runs,
+        provider=provider,
+        model=model,
+        effort=effort,
+        metric=metric,
+        jobs=args.jobs,
+    )
+    rates = scores["rates"]
+    print(
+        f"detection {rates['detection']['hits']}/{rates['detection']['of']}, "
+        f"attribution {rates['attribution']['hits']}/{rates['attribution']['of']}, "
+        f"false positives {rates['false_positive']['hits']}/"
+        f"{rates['false_positive']['of']}; {scores['errors']} errors; "
+        f"${scores['cost']['usd']:.4f} -> {out}"
     )
     return EXIT_OK
 

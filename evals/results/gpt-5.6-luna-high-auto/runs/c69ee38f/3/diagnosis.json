@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "startup_ttid_ms",
+    "unit": "ms",
+    "baseline": 425.901458,
+    "current": 386.763334,
+    "delta": -39.138124000000005,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n"
+  },
+  "confidence": "medium",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c2",
+      "text": "The startup rows used for the comparison are cold starts of com.superplayer.demo in both captures.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT s.startup_id, s.package, s.startup_type,\n  d.time_to_initial_display / 1e6 AS ttid_ms,\n  d.time_to_full_display / 1e6 AS ttfd_ms\nFROM android_startups s JOIN android_startup_time_to_display d USING (startup_id)\nWHERE s.startup_type = 'cold' AND s.package = 'com.superplayer.demo'\nORDER BY s.startup_id",
+          "row_count": 20,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT s.startup_id, s.package, s.startup_type,\n  d.time_to_initial_display / 1e6 AS ttid_ms,\n  d.time_to_full_display / 1e6 AS ttfd_ms\nFROM android_startups s JOIN android_startup_time_to_display d USING (startup_id)\nWHERE s.startup_type = 'cold' AND s.package = 'com.superplayer.demo'\nORDER BY s.startup_id",
+          "row_count": 20,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The range's top commit is a FeedScreen handler rename, not an observed startup-path change.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "d06e018fc738bebf0f5ccf2814efba445a6cfdfe",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "d06e018fc738bebf0f5ccf2814efba445a6cfdfe",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "No commit is attributed because the app-level startup metric improved across the range rather than regressing.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "d06e018fc738bebf0f5ccf2814efba445a6cfdfe",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "d06e018fc738bebf0f5ccf2814efba445a6cfdfe",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "This conclusion is based on one baseline/current trace pair; run-to-run noise cannot be estimated reliably.",
+    "The captures were made on an Android emulator, so the absolute startup times may not represent physical-device performance.",
+    "The generic frame-based metrics select the launcher as the dominant framed process in these traces, so startup TTID is the more appropriate app-level metric here."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c1",
+      "text": "Cold-start time to initial display improved from 425.901458 ms in the baseline to 386.763334 ms in the current trace, a delta of -39.138124 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY count(*) ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 22 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause"
+        }
+      ],
+      "reason": "citation 2: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 22 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause"
+    }
+  ],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 8,
+    "citations_passed": 7,
+    "wall_time_s": 9.768
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "efb14daebf518898a31ff9fbb91da16142587e2ca5d2b409446b43b075d803ca",
+      "current_sha256": "6eb9ff2d2edbac8869df550b6ae84d37c8a7014eaa400f58d2bcd7a49421fc0d",
+      "range": "b02f404a1ad7a338b53fd44c55aa769d0ec9e2a7..d06e018fc738bebf0f5ccf2814efba445a6cfdfe"
+    },
+    "tool_calls": 40,
+    "usage": {
+      "input_tokens": 24,
+      "output_tokens": 8670,
+      "cache_read_input_tokens": 143371,
+      "cache_creation_input_tokens": 41419
+    },
+    "usd": 0.023631,
+    "wall_time_s": 246.277
+  }
+}

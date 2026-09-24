@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "startup_ttid_ms",
+    "unit": "ms",
+    "baseline": 349.682708,
+    "current": 664.881333,
+    "delta": 315.19862500000005,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+    "files": [
+      "demo/src/main/AndroidManifest.xml",
+      "demo/src/main/kotlin/com/superplayer/demo/DemoApplication.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Cold-start median TTID increased from 349.682708 ms in the baseline to 664.881333 ms in the current trace, a 315.198625 ms regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.superplayer.demo' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold\n)\nSELECT ns / 1e6 AS median_ttid_ms FROM ranked WHERE rank = (n + 1) / 2",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.superplayer.demo' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold\n)\nSELECT ns / 1e6 AS median_ttid_ms FROM ranked WHERE rank = (n + 1) / 2",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The regression localizes to the app's main-thread bindApplication work: its median duration rose from 97.692292 ms in the baseline to 465.286959 ms in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "WITH ranked AS (\n  SELECT s.dur / 1e6 AS bind_ms,\n         row_number() OVER (ORDER BY s.dur) AS rank,\n         count(*) OVER () AS n\n  FROM process AS p JOIN thread AS t ON t.upid=p.upid\n  JOIN thread_track AS tt ON tt.utid=t.utid JOIN track AS tr ON tr.id=tt.id\n  JOIN slice AS s ON s.track_id=tr.id\n  WHERE p.name='com.superplayer.demo' AND t.tid=p.pid AND s.name='bindApplication'\n)\nSELECT bind_ms AS median_bind_application_ms FROM ranked WHERE rank = (n + 1) / 2",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH ranked AS (\n  SELECT s.dur / 1e6 AS bind_ms,\n         row_number() OVER (ORDER BY s.dur) AS rank,\n         count(*) OVER () AS n\n  FROM process AS p JOIN thread AS t ON t.upid=p.upid\n  JOIN thread_track AS tt ON tt.utid=t.utid JOIN track AS tr ON tr.id=tt.id\n  JOIN slice AS s ON s.track_id=tr.id\n  WHERE p.name='com.superplayer.demo' AND t.tid=p.pid AND s.name='bindApplication'\n)\nSELECT bind_ms AS median_bind_application_ms FROM ranked WHERE rank = (n + 1) / 2",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit fb30a9c67862bd42f9d8fab36f6c8dff37069417 registers DemoApplication in the manifest and adds synchronous launch-time cache work: checking or rebuilding a 192 MiB file and computing its CRC32 in Application.onCreate.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "path": "demo/src/main/AndroidManifest.xml",
+          "commit": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/DemoApplication.kt",
+          "commit": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The launch-time code added by fb30a9c67862bd42f9d8fab36f6c8dff37069417 directly matches the trace's bindApplication and TTID regression, so it is the attributed culprit.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH ranked AS (\n  SELECT s.dur / 1e6 AS bind_ms,\n         row_number() OVER (ORDER BY s.dur) AS rank,\n         count(*) OVER () AS n\n  FROM process AS p JOIN thread AS t ON t.upid=p.upid\n  JOIN thread_track AS tt ON tt.utid=t.utid JOIN track AS tr ON tr.id=tt.id\n  JOIN slice AS s ON s.track_id=tr.id\n  WHERE p.name='com.superplayer.demo' AND t.tid=p.pid AND s.name='bindApplication'\n)\nSELECT bind_ms AS median_bind_application_ms FROM ranked WHERE rank = (n + 1) / 2",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.superplayer.demo' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold\n)\nSELECT ns / 1e6 AS median_ttid_ms FROM ranked WHERE rank = (n + 1) / 2",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/DemoApplication.kt",
+          "commit": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "path": "demo/src/main/AndroidManifest.xml",
+          "commit": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Each side is a single trace capture, so run-to-run noise cannot be quantified independently, although each trace contains multiple cold starts.",
+    "The current run metadata identifies a non-debuggable benchmark build on an sdk_gphone64_arm64 emulator."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 12.255
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "452a252f73624afc82772a907c177a5293854e2a8cb5d8ef6f3c44bca0c76eb9",
+      "current_sha256": "eba8c81df96842934c597b3b10a0edd3af9b231093010ff16b848ce08766cc4d",
+      "range": "ad46b666f8c03a6f333541969edd7e0085ff7b52..fb30a9c67862bd42f9d8fab36f6c8dff37069417"
+    },
+    "tool_calls": 40,
+    "usage": {
+      "input_tokens": 30,
+      "output_tokens": 8853,
+      "cache_read_input_tokens": 195154,
+      "cache_creation_input_tokens": 48799
+    },
+    "usd": 0.026732,
+    "wall_time_s": 282.687
+  }
+}

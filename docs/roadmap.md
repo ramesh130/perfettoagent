@@ -131,8 +131,10 @@ goes). Apply the same five plants and capture clean pairs.
   thrash shows on `frame_ui_time_p95_ms` but not on `jank_frames_pct`.
 - **Done when:** its cases are in `evals/cases/`.
 
-### 9. [ ] Eval runner and results
+### 9. [~] Eval runner and results ([#33](https://github.com/ramesh130/perfettoagent/issues/33) runner)
 Write a local `evals/run_eval.py`, since `evalharness` cannot score these runs (Q2, ADR-0016).
+#33 built it as `perfettoagent eval`, and scored every superPlayer case three times on
+`gpt-5.6-luna` at effort `high` (ADR-0027).
 Run every case **three times** and sweep effort levels, for each model: `gpt-5.6-luna`, the
 headline, and `claude-opus-5-5`, compared (ADR-0020). Never pool results across models.
 Report:

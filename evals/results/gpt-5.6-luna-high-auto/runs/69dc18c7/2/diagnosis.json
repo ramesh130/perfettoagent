@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "main_thread_blocked_ms",
+    "unit": "ms",
+    "baseline": 25.284169,
+    "current": 731.530503,
+    "delta": 706.2463339999999,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM frames\n  ),\n  work AS (\n    SELECT s.ts, s.dur\n    FROM slice AS s\n    JOIN thread_track AS t ON t.id = s.track_id\n    WHERE t.utid IN (SELECT utid FROM main_thread)\n      AND s.depth = 0 AND s.dur > 0\n      AND s.name NOT GLOB 'Choreographer#doFrame*'\n  ),\n  blocked AS (\n    SELECT ts, dur\n    FROM thread_state\n    WHERE utid IN (SELECT utid FROM main_thread)\n      AND dur > 0 AND state NOT IN ('Running', 'R', 'R+')\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (\n      SELECT 1 FROM thread_state WHERE utid IN (SELECT utid FROM main_thread)\n    ) THEN NULL\n    ELSE coalesce((\n      SELECT sum(min(b.ts + b.dur, w.ts + w.dur) - max(b.ts, w.ts))\n      FROM blocked AS b\n      JOIN work AS w ON b.ts < w.ts + w.dur AND w.ts < b.ts + b.dur\n    ), 0) / 1e6\n  END AS value\n"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+    "files": [
+      "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Main-thread blocked time increased from 25.284169 ms in the baseline to 731.530503 ms in the current trace, a delta of 706.2463339999999 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM frames\n  ),\n  work AS (\n    SELECT s.ts, s.dur\n    FROM slice AS s\n    JOIN thread_track AS t ON t.id = s.track_id\n    WHERE t.utid IN (SELECT utid FROM main_thread)\n      AND s.depth = 0 AND s.dur > 0\n      AND s.name NOT GLOB 'Choreographer#doFrame*'\n  ),\n  blocked AS (\n    SELECT ts, dur\n    FROM thread_state\n    WHERE utid IN (SELECT utid FROM main_thread)\n      AND dur > 0 AND state NOT IN ('Running', 'R', 'R+')\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (\n      SELECT 1 FROM thread_state WHERE utid IN (SELECT utid FROM main_thread)\n    ) THEN NULL\n    ELSE coalesce((\n      SELECT sum(min(b.ts + b.dur, w.ts + w.dur) - max(b.ts, w.ts))\n      FROM blocked AS b\n      JOIN work AS w ON b.ts < w.ts + w.dur AND w.ts < b.ts + b.dur\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM frames\n  ),\n  work AS (\n    SELECT s.ts, s.dur\n    FROM slice AS s\n    JOIN thread_track AS t ON t.id = s.track_id\n    WHERE t.utid IN (SELECT utid FROM main_thread)\n      AND s.depth = 0 AND s.dur > 0\n      AND s.name NOT GLOB 'Choreographer#doFrame*'\n  ),\n  blocked AS (\n    SELECT ts, dur\n    FROM thread_state\n    WHERE utid IN (SELECT utid FROM main_thread)\n      AND dur > 0 AND state NOT IN ('Running', 'R', 'R+')\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (\n      SELECT 1 FROM thread_state WHERE utid IN (SELECT utid FROM main_thread)\n    ) THEN NULL\n    ELSE coalesce((\n      SELECT sum(min(b.ts + b.dur, w.ts + w.dur) - max(b.ts, w.ts))\n      FROM blocked AS b\n      JOIN work AS w ON b.ts < w.ts + w.dur AND w.ts < b.ts + b.dur\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The current trace contains six named input-delivery slices lasting at least 100 ms, totaling 727.312415 ms; the baseline contains none.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT count(*) AS long_named_input_events,\n  coalesce(sum(dur), 0) / 1e6 AS long_named_input_ms,\n  coalesce(max(dur), 0) / 1e6 AS max_long_named_input_ms\nFROM slice\nWHERE name GLOB 'deliverInputEvent src=*' AND dur >= 100000000",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT count(*) AS long_named_input_events,\n  coalesce(sum(dur), 0) / 1e6 AS long_named_input_ms,\n  coalesce(max(dur), 0) / 1e6 AS max_long_named_input_ms\nFROM slice\nWHERE name GLOB 'deliverInputEvent src=*' AND dur >= 100000000",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Those six current input-delivery slices are predominantly S-state waits, each lasting about 120 ms; this matches the 120 ms main-thread sleep added by the culprit commit.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.name AS slice_name, s.dur / 1e6 AS duration_ms,\n  ts.state, ts.dur / 1e6 AS blocked_state_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread_state AS ts ON ts.utid = tt.utid\n  AND ts.ts < s.ts + s.dur AND s.ts < ts.ts + ts.dur\nWHERE s.name GLOB 'deliverInputEvent src=*'\n  AND s.dur >= 100000000\n  AND ts.state NOT IN ('Running', 'R', 'R+')\nORDER BY s.dur DESC",
+          "row_count": 6,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "At the range head, the Thread.sleep(TAP_HOLD_MS) line and TAP_HOLD_MS = 120L constant are both attributed to commit c70fd55eea9930f42380069d9b1f0a3f22bc403b.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "There is only one capture per side, so unrelated run-to-run noise cannot be quantified.",
+    "The current run is a non-debuggable benchmark build on an emulator; the trace evidence establishes the blocking behavior but not source line-level runtime attribution beyond the matching commit change."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 7,
+    "citations_passed": 7,
+    "wall_time_s": 9.398
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "b99b711767a5773e604e8c16b300bc638c7cba6903ded19fd3f12b0bb27f0442",
+      "current_sha256": "7a1e21ea7f5088a554e86b43216674534dc6a59176251dfabe4e21690639559b",
+      "range": "dae3767d00fae05a8095eb6676185f8e758d7507..36bbe32683f70ecc17070a3be23c6c33007881d7"
+    },
+    "tool_calls": 53,
+    "usage": {
+      "input_tokens": 51,
+      "output_tokens": 10570,
+      "cache_read_input_tokens": 494094,
+      "cache_creation_input_tokens": 46342
+    },
+    "usd": 0.034162,
+    "wall_time_s": 227.152
+  }
+}

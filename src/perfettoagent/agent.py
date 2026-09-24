@@ -43,19 +43,35 @@ from perfettoagent.diagnosis import (
     DiagnosisInvalid,
     check_output,
 )
-from perfettoagent.git import GitError
+from perfettoagent.git import GitError, GitUnavailable
 from perfettoagent.loop import Ending, RunFailed
 from perfettoagent.metrics import MetricError, UnknownMetric, compute_metric
 from perfettoagent.metrics import list_metrics as metric_library
 from perfettoagent.openai_loop import OpenAILoop
 from perfettoagent.repo_tools import REPO_TOOLS
 from perfettoagent.symbolize import TraceContext
-from perfettoagent.trace_processor import resolve_trace_processor, sha256_of
+from perfettoagent.trace_processor import (
+    TraceProcessorError,
+    resolve_trace_processor,
+    sha256_of,
+)
 from perfettoagent.trace_tools import TRACE_TOOLS
 from perfettoagent.verify import QUERY_CACHE_DIR, check_range, verify
 
 # `--metric auto`: the model picks from list_metrics (roadmap Q3).
 AUTO = "auto"
+
+# What ends a run without a diagnosis, once it has started: the provider's errors, and
+# the run failures `diagnose` raises. The CLI prints them; the eval runner records
+# them as the run's outcome (ADR-0027).
+RUN_ERRORS = (
+    anthropic.AnthropicError,
+    openai.OpenAIError,
+    DiagnosisInvalid,
+    RunFailed,
+    GitUnavailable,
+    TraceProcessorError,
+)
 
 # Each provider's loop (ADR-0020).
 LOOPS = {"anthropic": AnthropicLoop, "openai": OpenAILoop}
