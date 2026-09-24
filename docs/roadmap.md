@@ -94,8 +94,10 @@ recording (trace in, diagnosis out) is linked.
 `read_run_metadata`, with the limits in `tech-stack.md`.
 - **Done when:** each tool has schema and limit tests against a fixture repo.
 
-### 7. [ ] `diagnose`: agent loop and output
-Build the Tool Runner loop, the frozen system prompt and structured output.
+### 7. [ ] `diagnose`: agent loop and output ([#29](https://github.com/ramesh130/perfettoagent/issues/29) tracer bullet)
+Build the Tool Runner loop, the frozen system prompt and structured output. #29 built the
+Anthropic loop, `diagnosis.json` and an offline end-to-end test (ADR-0022); the live run on
+the leak case, this item's done criterion, moved to #43.
 `--provider` and `--model` choose the model (ADR-0020). `claude-opus-5-5` comes first; the
 OpenAI path (#43), with its own loop, then makes `gpt-5.6-luna` the default.
 

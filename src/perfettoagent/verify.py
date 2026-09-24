@@ -108,6 +108,14 @@ class _Range:
         )
 
 
+def check_range(repo: str | Path, git_range: str) -> str:
+    """`git_range` as `base..head` in full shas. Raises RangeError unless it is
+    `base..head` with both ends naming commits in `repo`: what `verify` will require,
+    checked before an agent run spends anything on a range it would refuse."""
+    rng = _Range.parse(Path(repo), git_range)
+    return f"{rng.base}..{rng.head}"
+
+
 def verify(
     output: dict,
     *,

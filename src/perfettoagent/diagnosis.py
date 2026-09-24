@@ -139,6 +139,9 @@ _CULPRIT = _nullable(
 )
 _CAVEATS = _array(_STRING)
 
+# The metric's fields, by name: what code copies from a compute_metric result.
+METRIC_FIELDS = tuple(_METRIC["anyOf"][0]["properties"])
+
 OUTPUT_SCHEMA = _object(
     "A cited diagnosis of one trace pair and one git range.",
     verdict=_enum(VERDICTS),

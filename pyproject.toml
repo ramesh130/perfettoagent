@@ -8,7 +8,9 @@ authors = [
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "anthropic>=1.8.0",
+]
 
 [project.scripts]
 perfettoagent = "perfettoagent.cli:main"
@@ -19,6 +21,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "httpx2>=2.13.1",
     "pytest>=8",
     "pytest-socket>=0.7",
     "ruff>=0.6",

@@ -42,9 +42,9 @@ Two providers, chosen per run with `--provider {anthropic,openai}` and `--model 
 - Structured output goes through `output_config.format` or `text.format`, and is then
   validated again locally.
 - The system prompt is frozen text, cached: a `cache_control` breakpoint for Anthropic, the
-  first `developer` item under implicit caching for OpenAI. Volatile inputs (paths, range,
-  run metadata) go in the first user message. From the second eval run on, cache reads must
-  be non-zero: `usage.cache_read_input_tokens` for Anthropic,
+  first `developer` item under implicit caching for OpenAI. Volatile inputs (range, run
+  metadata; never a path, ADR-0022) go in the first user message. From the second eval run
+  on, cache reads must be non-zero: `usage.cache_read_input_tokens` for Anthropic,
   `usage.input_tokens_details.cached_tokens` for OpenAI.
 - Don't use assistant prefill or forced tool choice. Tool choice is `auto` on both.
 - Look up SDK details from the source, not from memory: the `claude-api` skill for
@@ -80,7 +80,7 @@ ceiling, and each capped result says whether it was cut and gives the true total
 
 | Tool | Limit / rule |
 |---|---|
-| `query_trace(sql, which)` | Accepts only `SELECT`/`WITH`. Returns at most **200 rows**, capped in our code, and `row_count` always gives the true total. |
+| `query_trace(sql, which)` | Accepts only `SELECT`/`WITH`, after any `INCLUDE PERFETTO MODULE` lines, as a citation does (ADR-0022). Returns at most **200 rows**, capped in our code, and `row_count` always gives the true total. |
 | `list_metrics()` | Lists the canned metric library only. |
 | `compute_metric(name)` | Returns the `sql_used` so the model can cite it. A per-key metric also returns at most 40 breakdown rows, and each one has its own `sql_used` (ADR-0005). A value the trace has no data for is `null`, with a `no_data` reason, never 0 (ADR-0014). |
 | `get_git_log(range, paths)` | At most **200 commits**. |
