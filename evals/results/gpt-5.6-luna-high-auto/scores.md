@@ -26,6 +26,8 @@ Lowest and highest are the rate over one repetition of every case: the spread, n
 | `f21c443c` | regression | regression, regression, regression | 3/3 | 3/3 | – |  |
 | `f37266c8` | no_regression | regression, no_regression, no_regression | – | – | 1/3 | yes |
 
+Cache reads from the second run on: 20 of 20 runs read cached tokens.
+
 ## Cost
 
 $0.9696 in all; per run $0.0323, 311 s (from 154 to 1009 s).

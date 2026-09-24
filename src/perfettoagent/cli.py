@@ -134,6 +134,20 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ev.add_argument("--jobs", type=int, default=1, help="runs at once (default: 1)")
     ev.add_argument(
+        "--provider",
+        choices=models.PROVIDERS,
+        default=models.DEFAULT_PROVIDER,
+        help=f"the model provider (default: {models.DEFAULT_PROVIDER})",
+    )
+    ev.add_argument(
+        "--model", help="a model id with a price row (default: the provider's own)"
+    )
+    ev.add_argument(
+        "--effort",
+        default=models.DEFAULT_EFFORT,
+        help=f"the reasoning effort (default: {models.DEFAULT_EFFORT})",
+    )
+    ev.add_argument(
         "--out",
         type=Path,
         help="the results directory (default: evals/results/<model>-<effort>-<metric>)",
@@ -258,8 +272,13 @@ def _eval(args: argparse.Namespace) -> int:
         print("perfettoagent eval: rejected: --runs and --jobs are at least 1",
               file=sys.stderr)  # fmt: skip
         return EXIT_REJECTED
-    provider, effort, metric = models.DEFAULT_PROVIDER, models.DEFAULT_EFFORT, AUTO
-    model = models.DEFAULT_MODELS[provider]
+    provider, effort, metric = args.provider, args.effort, AUTO
+    model = args.model or models.DEFAULT_MODELS[provider]
+    try:
+        models.check_model(provider, model, effort)
+    except models.ModelRefused as e:
+        print(f"perfettoagent eval: rejected: {e}", file=sys.stderr)
+        return EXIT_REJECTED
     out = args.out or RESULTS_DIR / results_name(model, effort, metric)
     scores = run_eval(
         out,

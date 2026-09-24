@@ -159,3 +159,20 @@ def test_cases_are_counted_by_kind():
 def test_a_run_of_a_case_with_no_answer_is_refused():
     with pytest.raises(ValueError, match="no expected answer"):
         score([ran("zz", 1, "no_regression")], EXPECTED)
+
+
+def test_from_the_second_repetition_every_run_must_read_the_cache():
+    warm = {
+        "input_tokens": 5,
+        "output_tokens": 10,
+        "cache_read_input_tokens": 900,
+        "cache_creation_input_tokens": 0,
+    }
+    cold = {**warm, "cache_read_input_tokens": 0}
+    outcomes = [
+        ran("k1", 1, "no_regression", usage=cold),  # the first may be cold
+        ran("k1", 2, "no_regression", usage=warm),
+        ran("k2", 2, "no_regression", usage=cold),
+        failed("k1", 3),  # no diagnosis, no usage to check
+    ]
+    assert score(outcomes, EXPECTED)["cache"] == {"checked": 2, "missing": ["k2/2"]}

@@ -11,9 +11,11 @@ Each run writes, under `<out>/runs/<case>/<n>/`:
   that ended it, redacted).
 
 A run whose `result.json` exists is not run again, so an interrupted sweep resumes
-where it stopped. Once every run has a result, the runs are scored against
-`evals/answers/` (`perfettoagent.scoring`) and written as `scores.json` and
-`scores.md`. The answers are read only to score, after the runs.
+where it stopped. It must have been run with the same provider, model, effort and
+metric choice: results from different settings are never pooled (ADR-0020). Once
+every run has a result, the runs are scored against `evals/answers/`
+(`perfettoagent.scoring`) and written as `scores.json` and `scores.md`. The answers
+are read only to score, after the runs.
 """
 
 import json
@@ -79,7 +81,14 @@ def run_eval(
         directory = out / "runs" / case_id / str(n)
         result = directory / "result.json"
         if result.is_file():
-            return Outcome(**json.loads(result.read_text())["outcome"])
+            recorded = json.loads(result.read_text())
+            ran_with = {k: recorded.get(k) for k in settings}
+            if ran_with != settings:
+                raise SystemExit(
+                    f"{result} was run with {ran_with}, not {settings}: results from "
+                    "different settings are never pooled; use another --out"
+                )
+            return Outcome(**recorded["outcome"])
         outcome = _run_once(case_id, n, directory, settings, root, diagnose_fn)
         _write_json(result, {**settings, "outcome": asdict(outcome)})
         log(_line(outcome))
@@ -199,6 +208,16 @@ def render_scores(scores: dict) -> str:
             f"{'–' if planted else _marks(c['false_positive'])} | "
             f"{'yes' if c['flipped'] else ''} |"
         )
+    cache = scores["cache"]
+    read = cache["checked"] - len(cache["missing"])
+    missed = (
+        f"; none read by {', '.join(cache['missing'])}." if cache["missing"] else "."
+    )
+    lines += [
+        "",
+        f"Cache reads from the second run on: {read} of {cache['checked']} runs read "
+        f"cached tokens{missed}",
+    ]
     cost = scores["cost"]
     wall = cost["wall_time_s"]
     lines += ["", "## Cost", ""]
