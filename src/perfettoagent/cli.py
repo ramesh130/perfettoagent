@@ -3,9 +3,17 @@
 import argparse
 import json
 import sys
+from pathlib import Path
 
+import anthropic
+
+from perfettoagent.agent import AUTO, RunFailed, diagnose
+from perfettoagent.diagnosis import DiagnosisInvalid
+from perfettoagent.git import GitError, GitUnavailable
+from perfettoagent.metrics import UnknownMetric
 from perfettoagent.query import MAX_ROWS, QueryRejected, query_trace
 from perfettoagent.trace_processor import TraceProcessorError
+from perfettoagent.verify import RangeError
 
 # Exit statuses. 2 matches argparse's own usage errors: the input was refused as given.
 EXIT_OK = 0
@@ -19,6 +27,34 @@ def build_parser() -> argparse.ArgumentParser:
         description="Perfetto trace + git range in, cited diagnosis out.",
     )
     commands = parser.add_subparsers(dest="command")
+
+    dx = commands.add_parser(
+        "diagnose",
+        help="diagnose a trace pair against a git range, and write diagnosis.json",
+        description=(
+            "Run the agent on a baseline and a current trace and a range of the target "
+            "repo, verify every claim it makes, and write diagnosis.json (schema 1). "
+            "Calls the Anthropic API, with credentials from ANTHROPIC_API_KEY or an "
+            "`ant auth login` profile."
+        ),
+    )
+    dx.add_argument("--baseline", required=True, help="the trace before the change")
+    dx.add_argument("--current", required=True, help="the trace after the change")
+    dx.add_argument("--repo", required=True, help="the target app's git repo")
+    dx.add_argument(
+        "--range", required=True, dest="git_range", help="base..head, two commits"
+    )
+    dx.add_argument(
+        "--metric",
+        default=AUTO,
+        help=f"a library metric, or {AUTO} (default) for the agent to choose",
+    )
+    dx.add_argument(
+        "--out",
+        type=Path,
+        default=Path("diagnosis.json"),
+        help="where to write the diagnosis (default: diagnosis.json)",
+    )
 
     tp = commands.add_parser(
         "tp",
@@ -45,7 +81,49 @@ def main(argv: list[str] | None = None) -> int:
     if args.command is None:
         parser.print_help()
         return EXIT_OK
+    if args.command == "diagnose":
+        return _diagnose(args)
     return _tp(args)
+
+
+def _diagnose(args: argparse.Namespace) -> int:
+    try:
+        diagnosis = diagnose(
+            baseline=args.baseline,
+            current=args.current,
+            repo=args.repo,
+            git_range=args.git_range,
+            metric=args.metric,
+        )
+    except (FileNotFoundError, RangeError, UnknownMetric, GitError) as e:
+        # Refused before any request: the inputs as given cannot be diagnosed.
+        print(f"perfettoagent diagnose: rejected: {e}", file=sys.stderr)
+        return EXIT_REJECTED
+    except (
+        anthropic.AnthropicError,
+        DiagnosisInvalid,
+        RunFailed,
+        GitUnavailable,
+        TraceProcessorError,
+    ) as e:
+        # Nothing is written: a diagnosis.json that exists has been verified.
+        print(f"perfettoagent diagnose: {e}", file=sys.stderr)
+        return EXIT_FAILED
+    args.out.write_text(json.dumps(diagnosis, indent=2) + "\n")
+    print(_summary(diagnosis, args.out))
+    return EXIT_OK
+
+
+def _summary(diagnosis: dict, out: Path) -> str:
+    """One line: the verdict, what survived the verifier, and what the run cost."""
+    run = diagnosis["run"]
+    culprit = diagnosis["culprit"]
+    commit = f", commit {culprit['commit'][:12]}" if culprit else ""
+    return (
+        f"{diagnosis['verdict']}{commit}: {len(diagnosis['claims'])} claims kept, "
+        f"{len(diagnosis['dropped_claims'])} dropped; {run['tool_calls']} tool calls, "
+        f"${run['usd']:.4f}, {run['wall_time_s']:.0f} s -> {out}"
+    )
 
 
 def _tp(args: argparse.Namespace) -> int:
