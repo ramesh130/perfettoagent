@@ -1,7 +1,10 @@
 import json
 
+import httpx2
+import openai
 import pytest
 from fake_model import FakeModel, reply, text
+from fake_openai import FakeOpenAI
 from test_diagnose import answer, build_repo
 
 from perfettoagent import agent
@@ -87,13 +90,20 @@ def repo(tmp_path_factory) -> dict:
 
 @pytest.fixture
 def cli_model(monkeypatch, trace_processor):
-    """Makes the CLI's `anthropic.Anthropic()` return a fake model's client, and
-    points it at the real trace processor. Returns a setter for the script."""
+    """Makes the client the CLI builds a fake model's, for the provider it asks for,
+    and points it at the real trace processor. Returns a setter for the script; the
+    fake's `providers` lists each provider a client was made for."""
     monkeypatch.setenv("TRACE_PROCESSOR", str(trace_processor))
 
-    def use(script) -> FakeModel:
-        fake = FakeModel(script)
-        monkeypatch.setattr(agent.anthropic, "Anthropic", lambda: fake.client)
+    def use(script, provider: str = "openai"):
+        fake = {"openai": FakeOpenAI, "anthropic": FakeModel}[provider](script)
+        fake.providers = []
+
+        def make_client(asked: str):
+            fake.providers.append(asked)
+            return fake.client
+
+        monkeypatch.setattr(agent, "make_client", make_client)
         return fake
 
     return use
@@ -156,3 +166,72 @@ def test_diagnose_rejects_a_bad_range_before_any_request(
     assert fake.requests == []
     assert not out.exists()
     assert "rejected: the range's base" in capsys.readouterr().err
+
+
+def test_diagnose_runs_on_openai_gpt_5_6_luna_by_default(
+    cli_model, repo, tiny_trace, tmp_path
+):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))))
+    out = tmp_path / "diagnosis.json"
+    assert diagnose_cli(repo, tiny_trace, out) == 0
+    assert fake.providers == ["openai"]
+    assert fake.requests[0]["model"] == "gpt-5.6-luna"
+    run = json.loads(out.read_text())["run"]
+    assert (run["provider"], run["model"]) == ("openai", "gpt-5.6-luna")
+
+
+def test_diagnose_runs_on_anthropic_when_asked(cli_model, repo, tiny_trace, tmp_path):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))), "anthropic")
+    out = tmp_path / "diagnosis.json"
+    assert diagnose_cli(repo, tiny_trace, out, "--provider", "anthropic") == 0
+    assert fake.providers == ["anthropic"]
+    assert fake.requests[0]["model"] == "claude-opus-5-5"
+    assert json.loads(out.read_text())["run"]["provider"] == "anthropic"
+
+
+@pytest.mark.parametrize(
+    "flags, message",
+    [
+        (["--model", "gpt-4o"], "no price for 'gpt-4o'"),
+        (["--model", "claude-opus-5-5"], "runs on anthropic, not openai"),
+    ],
+)
+def test_diagnose_rejects_a_model_it_cannot_run_before_any_request(
+    cli_model, repo, tiny_trace, tmp_path, capsys, flags, message
+):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))))
+    out = tmp_path / "diagnosis.json"
+    assert diagnose_cli(repo, tiny_trace, out, *flags) == 2
+    assert fake.requests == [] and fake.providers == []
+    assert not out.exists()
+    assert message in capsys.readouterr().err
+
+
+def test_diagnose_prints_no_piece_of_a_key_from_an_api_error(
+    monkeypatch, trace_processor, repo, tiny_trace, tmp_path, capsys
+):
+    """OpenAI's 401 quotes a masked piece of the key it was sent (#43: no key appears
+    in any output)."""
+    monkeypatch.setenv("TRACE_PROCESSOR", str(trace_processor))
+    body = {
+        "error": {
+            "message": "Incorrect API key provided: sk-proj-****wxyz. You can find "
+            "your API key at https://platform.openai.com/account/api-keys.",
+            "type": "invalid_request_error",
+            "code": "invalid_api_key",
+        }
+    }
+    client = openai.OpenAI(
+        api_key="sk-proj-made-up-wxyz",
+        max_retries=0,
+        http_client=httpx2.Client(
+            transport=httpx2.MockTransport(lambda r: httpx2.Response(401, json=body))
+        ),
+    )
+    monkeypatch.setattr(agent, "make_client", lambda provider: client)
+    out = tmp_path / "diagnosis.json"
+    assert diagnose_cli(repo, tiny_trace, out) == 1
+    err = capsys.readouterr().err
+    assert "Incorrect API key provided: [redacted]" in err
+    assert "sk-" not in err and "wxyz" not in err
+    assert not out.exists()

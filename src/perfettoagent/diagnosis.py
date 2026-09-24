@@ -222,6 +222,11 @@ DIAGNOSIS_SCHEMA = _object(
     run=_nullable(
         _object(
             "The agent run that produced the output.",
+            # Which model answered, and how hard it was asked to think (ADR-0020):
+            # results from different models or levels are never pooled.
+            provider=_STRING,
+            model=_STRING,
+            effort=_STRING,
             tool_calls=_INTEGER,
             usage=_object(
                 "Tokens, summed over the run's requests.",

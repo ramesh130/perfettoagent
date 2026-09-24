@@ -21,19 +21,21 @@ this file, first record an ADR in `docs/adr/`.
 Two providers, chosen per run with `--provider {anthropic,openai}` and `--model <id>`
 (ADR-0020, which supersedes ADR-0001). ADR-0020 maps each rule below onto both SDKs.
 
-- **Default: OpenAI `gpt-5.6-luna`**, the headline model in the eval table. It becomes the
-  default when the OpenAI path ships (#43). Until then the default, and the only working
-  path, is **Anthropic `claude-opus-5-5`**, which stays as a compared variant after that.
-  Model ids have no date suffix. A model with no row in the price table is refused.
+- **Default: OpenAI `gpt-5.6-luna`**, the headline model in the eval table (ADR-0023).
+  **Anthropic `claude-opus-5-5`** is the compared variant, with `--provider anthropic`.
+  Model ids have no date suffix. A model with no row in the price table, or named under the
+  other provider, is refused before any request.
 - **Anthropic Python SDK**, beta Tool Runner (`client.beta.messages.tool_runner` with
   `@beta_tool`). Don't hand-write the `stop_reason == "tool_use"` loop in v1. Each tool's
   schema is written by hand and passed to `beta_tool` unchanged, not generated (ADR-0018).
   Adaptive thinking is on.
 - **OpenAI Python SDK**, Responses API (`client.responses.create`), not Chat Completions. It
   has no tool runner, so this one loop is written by hand. The same hand-written schemas go
-  in as strict function tools, unchanged (ADR-0020).
-- `--effort` sweeps `low`, `medium`, `high` and `xhigh` for the cost table, and defaults to
-  `high`. It is always sent: `output_config.effort` for Anthropic, `reasoning.effort` for
+  in as strict function tools, unchanged (ADR-0020). Requests set `store: false` and replay
+  the whole history, reasoning items included (ADR-0023).
+- The effort level sweeps `low`, `medium`, `high` and `xhigh` for the cost table, and
+  defaults to `high`. `diagnose()` takes it as a parameter; the `--effort` flag comes with
+  the sweep (#44, ADR-0023). It is always sent: `output_config.effort` for Anthropic, `reasoning.effort` for
   OpenAI. A level a model does not support is refused, never rounded.
 - Every request is streamed, with an output cap of 64000 tokens (`max_tokens`,
   `max_output_tokens`). Check for truncation and refusal before reading content. Record a
@@ -49,9 +51,10 @@ Two providers, chosen per run with `--provider {anthropic,openai}` and `--model 
 - Don't use assistant prefill or forced tool choice. Tool choice is `auto` on both.
 - Look up SDK details from the source, not from memory: the `claude-api` skill for
   Anthropic, OpenAI's own docs for OpenAI. The Anthropic API surface changed in 2026.
-- Auth comes from `ANTHROPIC_API_KEY` or an `ant auth login` profile, and from
-  `OPENAI_API_KEY` in the environment or a `.env` file that `.gitignore` excludes. No key is
-  ever logged or written to results. Tests use neither key. Never put secrets in the repo.
+- Auth comes from `OPENAI_API_KEY` and `ANTHROPIC_API_KEY`, in the environment or a `.env`
+  file that `.gitignore` excludes, the environment winning; Anthropic also takes an
+  `ant auth login` profile (ADR-0023). No key is ever logged or written to results, and
+  printed errors are redacted. Tests use neither key. Never put secrets in the repo.
 - USD per run comes from a price table keyed by model id, with each price's source and the
   date it was checked (ADR-0020).
 
