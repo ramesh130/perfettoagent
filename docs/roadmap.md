@@ -96,6 +96,8 @@ recording (trace in, diagnosis out) is linked.
 
 ### 7. [ ] `diagnose`: agent loop and output
 Build the Tool Runner loop, the frozen system prompt and structured output.
+`--provider` and `--model` choose the model (ADR-0020). `claude-opus-5-5` comes first; the
+OpenAI path (#43), with its own loop, then makes `gpt-5.6-luna` the default.
 
 The prompt states the workflow: establish the metric delta, then localise it in the trace
 (thread, slice, span), then correlate it with the range, then blame.
@@ -121,7 +123,9 @@ goes). Apply the same five plants and capture clean pairs.
 
 ### 9. [ ] Eval runner and results
 Write a local `evals/run_eval.py`, since `evalharness` cannot score these runs (Q2, ADR-0016).
-Run every case **three times** and sweep effort levels. Report:
+Run every case **three times** and sweep effort levels, for each model: `gpt-5.6-luna`, the
+headline, and `claude-opus-5-5`, compared (ADR-0020). Never pool results across models.
+Report:
 
 | Metric | Definition |
 |---|---|
@@ -130,7 +134,7 @@ Run every case **three times** and sweep effort levels. Report:
 | False-positive rate | Clean pairs where the verdict is `regression` |
 | Citation validity | Citations that pass the verifier before dropping, as a share of all citations |
 | Time to diagnosis | Agent wall time vs. timed manual triage on the same five cases |
-| Cost and tokens per trace | USD, input, output and cache-read tokens at each effort level |
+| Cost and tokens per trace | USD, input, output and cache-read tokens for each model and effort level |
 
 Never score on the model's own confidence field.
 - **Done when:** a summary table is committed to `evals/results/summary.md`.

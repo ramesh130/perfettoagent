@@ -18,24 +18,42 @@ this file, first record an ADR in `docs/adr/`.
 
 ## Model and SDK
 
+Two providers, chosen per run with `--provider {anthropic,openai}` and `--model <id>`
+(ADR-0020, which supersedes ADR-0001). ADR-0020 maps each rule below onto both SDKs.
+
+- **Default: OpenAI `gpt-5.6-luna`**, the headline model in the eval table. It becomes the
+  default when the OpenAI path ships (#43). Until then the default, and the only working
+  path, is **Anthropic `claude-opus-5-5`**, which stays as a compared variant after that.
+  Model ids have no date suffix. A model with no row in the price table is refused.
 - **Anthropic Python SDK**, beta Tool Runner (`client.beta.messages.tool_runner` with
   `@beta_tool`). Don't hand-write the `stop_reason == "tool_use"` loop in v1. Each tool's
   schema is written by hand and passed to `beta_tool` unchanged, not generated (ADR-0018).
-- **Model `claude-opus-5-5`** (ADR-0001), with no date suffix. Adaptive thinking is on.
-  `output_config.effort` defaults to `high`. A CLI flag sweeps `low`, `medium`, `high` and
-  `xhigh` for the cost table.
-- Every request is streamed. The agent loop uses `max_tokens` 64000. Check `stop_reason` for
-  `max_tokens` and `refusal` before reading content. Record a refusal as an `inconclusive`
-  verdict with its category, and never retry it in a loop.
-- Structured output goes through `output_config.format` and is then validated again locally.
-- The system prompt is frozen text with a `cache_control` breakpoint. Volatile inputs
-  (paths, range, run metadata) go in the first user message. From the second eval run on,
-  `usage.cache_read_input_tokens` must be non-zero.
-- Don't use assistant prefill or forced `tool_choice`; current models don't support them.
-- Look up SDK details with the `claude-api` skill, not from memory. The API surface
-  changed in 2026.
-- Auth comes from `ANTHROPIC_API_KEY` or an `ant auth login` profile. Never put secrets in
-  the repo.
+  Adaptive thinking is on.
+- **OpenAI Python SDK**, Responses API (`client.responses.create`), not Chat Completions. It
+  has no tool runner, so this one loop is written by hand. The same hand-written schemas go
+  in as strict function tools, unchanged (ADR-0020).
+- `--effort` sweeps `low`, `medium`, `high` and `xhigh` for the cost table, and defaults to
+  `high`. It is always sent: `output_config.effort` for Anthropic, `reasoning.effort` for
+  OpenAI. A level a model does not support is refused, never rounded.
+- Every request is streamed, with an output cap of 64000 tokens (`max_tokens`,
+  `max_output_tokens`). Check for truncation and refusal before reading content. Record a
+  refusal or a truncated output as an `inconclusive` verdict with its reason (and its
+  category, where the provider gives one), and never retry it in a loop.
+- Structured output goes through `output_config.format` or `text.format`, and is then
+  validated again locally.
+- The system prompt is frozen text, cached: a `cache_control` breakpoint for Anthropic, the
+  first `developer` item under implicit caching for OpenAI. Volatile inputs (paths, range,
+  run metadata) go in the first user message. From the second eval run on, cache reads must
+  be non-zero: `usage.cache_read_input_tokens` for Anthropic,
+  `usage.input_tokens_details.cached_tokens` for OpenAI.
+- Don't use assistant prefill or forced tool choice. Tool choice is `auto` on both.
+- Look up SDK details from the source, not from memory: the `claude-api` skill for
+  Anthropic, OpenAI's own docs for OpenAI. The Anthropic API surface changed in 2026.
+- Auth comes from `ANTHROPIC_API_KEY` or an `ant auth login` profile, and from
+  `OPENAI_API_KEY` in the environment or a `.env` file that `.gitignore` excludes. No key is
+  ever logged or written to results. Tests use neither key. Never put secrets in the repo.
+- USD per run comes from a price table keyed by model id, with each price's source and the
+  date it was checked (ADR-0020).
 
 ## Perfetto
 
@@ -80,7 +98,8 @@ ceiling, and each capped result says whether it was cut and gives the true total
 
 ## Not allowed
 
-- A web UI, a database, LangChain, or a second model provider.
+- A web UI, a database, or LangChain.
+- A third model provider, without its own ADR. Two are allowed (ADR-0020).
 - Any runtime or test-time dependency on superPlayer or devicelab. Copy fixtures and code in
   instead; copying about 50 lines beats importing.
 - Parsing trace protobufs directly.

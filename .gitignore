@@ -14,6 +14,9 @@ evals/results/*
 # Local diagnose outputs
 out/
 
+# Local secrets: OPENAI_API_KEY (ADR-0020)
+.env
+
 # Claude Code personal files
 CLAUDE.local.md
 .claude/settings.local.json
