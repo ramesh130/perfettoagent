@@ -17,6 +17,9 @@
 --
 -- Starts with no TTFD (no reportFullyDrawn found) are left out of the median, not
 -- counted as 0.
+--
+-- Checked against every start's value, with the median taken in Python, on the
+-- fixtures in tests/test_metrics_startup.py.
 INCLUDE PERFETTO MODULE android.startup.startups;
 INCLUDE PERFETTO MODULE android.startup.time_to_display;
 WITH
