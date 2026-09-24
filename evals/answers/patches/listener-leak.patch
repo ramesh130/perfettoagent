@@ -1,0 +1,16 @@
+diff --git a/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt b/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt
+index 9c05959..65da3f3 100644
+--- a/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt
++++ b/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt
+@@ -527,11 +527,6 @@ public class SuperPlayer private constructor(
+         delegate.stop()
+         delegate.clearMediaItems()
+ 
+-        synchronized(wrappedListeners) {
+-            wrappedListeners.values.forEach(delegate::removeListener)
+-            wrappedListeners.clear()
+-        }
+-
+         delegate.playWhenReady = false
+         delegate.repeatMode = Player.REPEAT_MODE_OFF
+         delegate.shuffleModeEnabled = false

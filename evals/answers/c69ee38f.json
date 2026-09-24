@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "verdict": "no_regression",
+  "metrics": [],
+  "culprit": null,
+  "regression": null,
+  "plant": null,
+  "patch": null,
+  "provenance": {
+    "source_commit": "7b43b5fa05df6a1dd6e1497bf25b8078ade3977d",
+    "baseline_trace": "devicelab/out/20260924T013010Z-startup/trace.perfetto-trace",
+    "current_trace": "devicelab/out/20260924T013758Z-startup/trace.perfetto-trace"
+  }
+}

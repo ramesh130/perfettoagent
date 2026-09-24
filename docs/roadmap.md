@@ -62,7 +62,7 @@ Deterministic checks that run after the model's final output and before anything
   slow, cache SQL results by hash. Never skip it. The exact meaning of each rule, and the
   cache, are in ADR-0006.
 
-### 5. [ ] Ground truth: planted regressions ([#5](https://github.com/ramesh130/perfettoagent/issues/5) startup, [#6](https://github.com/ramesh130/perfettoagent/issues/6) jank, [#10](https://github.com/ramesh130/perfettoagent/issues/10) case packaging)
+### 5. [x] Ground truth: planted regressions ([#5](https://github.com/ramesh130/perfettoagent/issues/5) startup, [#6](https://github.com/ramesh130/perfettoagent/issues/6) jank, [#10](https://github.com/ramesh130/perfettoagent/issues/10) case packaging)
 Add startup and jank scenarios to devicelab, then capture these plants on the superPlayer
 demo:
 
@@ -77,10 +77,11 @@ demo:
 Also capture **clean pairs** (baseline against a second clean capture), at least as many as
 there are planted cases.
 
-Each case lives in `evals/cases/<opaque-id>/` with the patch, both traces, the range as two
-shas, the expected metric and the expected culprit. Case rules:
+Each case is an opaque id. `evals/cases/<id>/` holds only what the model sees: both traces,
+and the range as two shas in a fixture repo built to match them. The expected metric, the
+expected culprit and the patch live apart, in `evals/answers/` (ADR-0015). Case rules:
 - Each range contains at least 8 unrelated commits, so attribution is a search, not a lookup.
-- No prompt, path or fixture that the model can see names the plant.
+- No prompt, path or fixture that the model can see names the plant. A test scans for leaks.
 - **Done when:** five planted cases and at least five clean pairs are committed.
 
 ## Phase 2: Agent and eval

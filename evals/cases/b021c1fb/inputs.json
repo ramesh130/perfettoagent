@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "repo": "superplayer",
+  "range": {
+    "base": "db8ce6ebd0a0ecb29b301f50e5e998edb8551f2a",
+    "head": "95df81b0d49710e07326bc0eae1530d86e8dab4c"
+  }
+}

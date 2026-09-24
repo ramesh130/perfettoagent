@@ -1,3 +1,6 @@
 # Trace fixtures too large for plain git live in Git LFS (ADR-0004). Scoped to one
 # directory, so the small fixtures beside it (tiny.perfetto-trace) stay in plain git.
 tests/fixtures/large/** filter=lfs diff=lfs merge=lfs -text
+# The eval cases' traces (ADR-0015). Only the traces: a case's inputs.json, the answers and
+# the fixture repo's bundle stay in plain git, so any clone can load and check every case.
+evals/cases/**/*.gz filter=lfs diff=lfs merge=lfs -text
