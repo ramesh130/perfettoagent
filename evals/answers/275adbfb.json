@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "verdict": "regression",
+  "metrics": [
+    "startup_ttid_ms"
+  ],
+  "culprit": "08f14fc956f99b7fe7fd9600c410033491a4f6fb",
+  "regression": "Main-thread I/O on startup",
+  "plant": "startup-main-thread-io",
+  "patch": "patches/startup-main-thread-io.patch",
+  "provenance": {
+    "source_commit": "7b43b5fa05df6a1dd6e1497bf25b8078ade3977d",
+    "baseline_trace": "devicelab/out/20260924T011856Z-startup/trace.perfetto-trace",
+    "current_trace": "devicelab/out/20260924T012233Z-startup/trace.perfetto-trace"
+  }
+}

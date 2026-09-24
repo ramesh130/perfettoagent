@@ -11,7 +11,7 @@ this file, first record an ADR in `docs/adr/`.
 | Env / packaging | `uv` | `uv sync`, `uv run …`. The lockfile is committed. |
 | Lint / format | `ruff` | Rules `E, F, I, B, UP`. A Claude Code hook formats edited `.py` files. |
 | Tests | `pytest` + `pytest-socket` | `--disable-socket` is always on, so the suite must pass with no network. |
-| Large fixtures | Git LFS | Traces too large for plain git, under `tests/fixtures/large/` only (ADR-0004), new ones gzipped (ADR-0010). Without LFS, the tests that need them skip. |
+| Large fixtures | Git LFS | Traces too large for plain git: test fixtures under `tests/fixtures/large/` (ADR-0004), new ones gzipped (ADR-0010), and the eval cases' traces under `evals/cases/`, which a default fetch leaves out (ADR-0015). Without LFS, the tests that need them skip. |
 | CLI | `argparse` | Subcommands `diagnose`, `review`, `eval`, `tp`. |
 | CI | GitHub Actions | Runs `uv sync --locked`, ruff check, ruff format --check and pytest. Manual only (`workflow_dispatch`) until there is an Actions budget; until then run the same checks locally. |
 | License | Apache-2.0 | ADR-0002. |

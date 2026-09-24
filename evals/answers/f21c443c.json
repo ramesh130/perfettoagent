@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "verdict": "regression",
+  "metrics": [
+    "frame_ui_time_p95_ms",
+    "gc_time_ms"
+  ],
+  "culprit": "df89961db063808b178a2890a1c8c626173469a4",
+  "regression": "Allocation storm",
+  "plant": "feed-grain-allocations",
+  "patch": "patches/feed-grain-allocations.patch",
+  "provenance": {
+    "source_commit": "57e3144bca8c591023be8c764bf961c1892cd84d",
+    "baseline_trace": "devicelab/out/20260924T033342Z-jank/trace.perfetto-trace",
+    "current_trace": "devicelab/out/20260924T033945Z-jank/trace.perfetto-trace"
+  }
+}

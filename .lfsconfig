@@ -1,0 +1,6 @@
+# A default LFS fetch (a clone, `git lfs pull`, CI's checkout) leaves the eval cases'
+# traces out: the test suite does not read them, and they would add 114 MB to every fetch
+# against GitHub's 1 GB monthly bandwidth quota (ADR-0015). To run the evals, fetch them:
+#   git lfs pull --include="evals/cases/**" --exclude=""
+[lfs]
+	fetchexclude = evals/cases/**

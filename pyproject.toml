@@ -30,6 +30,11 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 
+[tool.ruff.lint.per-file-ignores]
+# Its edits quote lines of Kotlin source verbatim, and a literal that must match the
+# source exactly cannot be wrapped.
+"evals/build_cases.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # PRD §11: the suite must pass with no network. pytest-socket fails any test that opens one.

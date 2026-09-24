@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "verdict": "regression",
+  "metrics": [
+    "heap_growth_objects_by_class"
+  ],
+  "culprit": "329a445929ae3048995203fb7e1a198a186a2018",
+  "regression": "Listener leak",
+  "plant": "listener-leak",
+  "patch": "patches/listener-leak.patch",
+  "provenance": {
+    "source_commit": "abc232cb33fb06bf5f9de62856012cd77c434c32",
+    "baseline_trace": "devicelab/out/20260911T151106Z-leak-hunt/heap-feed-final.perfetto-trace",
+    "current_trace": "devicelab/out/20260911T144545Z-leak-hunt/heap-feed-final.perfetto-trace"
+  }
+}

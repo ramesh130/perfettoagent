@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "verdict": "regression",
+  "metrics": [
+    "frame_ui_time_p95_ms",
+    "jank_frames_pct"
+  ],
+  "culprit": "ce749addf1fee4dc8068a0ef48f6f516af216c37",
+  "regression": "Layout thrash",
+  "plant": "feed-row-remeasure",
+  "patch": "patches/feed-row-remeasure.patch",
+  "provenance": {
+    "source_commit": "57e3144bca8c591023be8c764bf961c1892cd84d",
+    "baseline_trace": "devicelab/out/20260924T033342Z-jank/trace.perfetto-trace",
+    "current_trace": "devicelab/out/20260924T034233Z-jank/trace.perfetto-trace"
+  }
+}
