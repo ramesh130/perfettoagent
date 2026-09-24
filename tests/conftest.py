@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 
@@ -37,7 +38,7 @@ def tiny_trace() -> Path:
     return TINY_TRACE
 
 
-# Traces too large for plain git (22-29 MB each) live in Git LFS: ADR-0004 and
+# Traces too large for plain git (12-33 MB each) live in Git LFS: ADR-0004 and
 # .gitattributes. Named for what they are, a baseline and a current capture, and never
 # for what differs between them (CLAUDE.md, eval integrity).
 LARGE_FIXTURES = FIXTURES / "large"
@@ -84,4 +85,27 @@ def startup_a_trio() -> tuple[Path, Path, Path]:
         large_fixture("startup-a-baseline.perfetto-trace.gz"),
         large_fixture("startup-a-current.perfetto-trace.gz"),
         large_fixture("startup-a-rerun.perfetto-trace.gz"),
+    )
+
+
+class JankTraces(NamedTuple):
+    """Four captures of one scripted scroll-and-tap scenario on one app, gzipped
+    (ADR-0010). `baseline` and `rerun` are two captures of the same build, the clean
+    pair. `current_b` and `current_c` are each a capture after a different change, and
+    each is compared against `baseline`. Named for their role, never for what changed
+    (CLAUDE.md, eval integrity)."""
+
+    baseline: Path
+    rerun: Path
+    current_b: Path
+    current_c: Path
+
+
+@pytest.fixture(scope="session")
+def jank_traces() -> JankTraces:
+    return JankTraces(
+        baseline=large_fixture("jank-a-baseline.perfetto-trace.gz"),
+        rerun=large_fixture("jank-a-rerun.perfetto-trace.gz"),
+        current_b=large_fixture("jank-b-current.perfetto-trace.gz"),
+        current_c=large_fixture("jank-c-current.perfetto-trace.gz"),
     )
