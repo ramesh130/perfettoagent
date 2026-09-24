@@ -32,6 +32,14 @@ Like the diagnosis output schema, every property is required, and an optional on
 
 `docs/tech-stack.md` had `grep_repo(pattern, paths, max_hits=100)`. A grep must read a commit, not the working tree. The working tree is whatever was last checked out, and neither trace need match it. So `grep_repo` gains `at`, the commit to search, as `git_blame` already has. The model gives the range's head, or its base to compare.
 
+## `grep_repo` patterns are POSIX extended regexes, with no backslash-letter escapes
+
+`git grep -E` uses the host's regex library. glibc accepts `\b`, `\w`, `\d` and `\s` as extensions; macOS's library does not, and `\bfoo` there silently matches nothing. A model will write `\b`, and a silent zero reads as "not in the repo". So a pattern with a backslash before a letter or digit is refused with a message naming the POSIX classes (`[[:digit:]]`, `[[:alnum:]_]`, `[[:space:]]`), and a pattern means the same on every host. `--perl-regexp` would accept them, but only where git was built with PCRE.
+
+## The tools' revisions may be branches or tags
+
+The verifier's commit citations must look like a sha (`resolve_sha`), so a ref named like a sha cannot stand in for one. The tools' `sha`, `at` and range ends go through `resolve_commit` and may also be a branch or a tag. Either way the text is read on stdin by `cat-file --batch-check`, and only the full sha it answers is passed as an argument.
+
 ## `git blame` gets no `--end-of-options`
 
 `perfettoagent.git`'s rule is `--end-of-options` before revisions and `--` before paths. Under git 2.50, `git blame --end-of-options <rev> -- <path>` no longer treats `--` as the end of revisions. It hands the path to the revision parser, so a path of `--output=<file>` wrote that file. The blame call leaves `--end-of-options` out. Its revision is always a full hex sha, resolved first, so it can never be an option anyway. A test tries each of five option-shaped strings as a pattern, a path and a revision on every tool, and checks that nothing was written.
