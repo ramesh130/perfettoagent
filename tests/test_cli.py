@@ -260,6 +260,48 @@ def test_diagnose_runs_on_anthropic_when_asked(cli_model, repo, tiny_trace, tmp_
     assert json.loads(out.read_text())["run"]["provider"] == "anthropic"
 
 
+# Where each provider's request carries the effort level (ADR-0020).
+EFFORT_FIELD = {
+    "openai": ("reasoning", "effort"),
+    "anthropic": ("output_config", "effort"),
+}
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("effort", ["low", "medium", "high", "xhigh"])
+def test_diagnose_sends_and_records_the_effort_asked_for(
+    cli_model, repo, tiny_trace, tmp_path, provider, effort
+):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))), provider)
+    out = tmp_path / "diagnosis.json"
+    flags = ["--provider", provider, "--effort", effort]
+    assert diagnose_cli(repo, tiny_trace, out, *flags) == 0
+    section, field = EFFORT_FIELD[provider]
+    assert fake.requests[0][section][field] == effort
+    assert json.loads(out.read_text())["run"]["effort"] == effort
+
+
+def test_diagnose_defaults_to_high_effort(cli_model, repo, tiny_trace, tmp_path):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))))
+    out = tmp_path / "diagnosis.json"
+    assert diagnose_cli(repo, tiny_trace, out) == 0
+    assert fake.requests[0]["reasoning"]["effort"] == "high"
+    assert json.loads(out.read_text())["run"]["effort"] == "high"
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+def test_diagnose_refuses_an_effort_the_model_lacks_before_any_request(
+    cli_model, repo, tiny_trace, tmp_path, capsys, provider
+):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))), provider)
+    out = tmp_path / "diagnosis.json"
+    flags = ["--provider", provider, "--effort", "max"]
+    assert diagnose_cli(repo, tiny_trace, out, *flags) == 2
+    assert fake.requests == []
+    assert not out.exists()
+    assert "has no effort 'max'" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     "flags, message",
     [

@@ -94,14 +94,14 @@ recording (trace in, diagnosis out) is linked.
 `read_run_metadata` (ADR-0025), with the limits in `tech-stack.md`.
 - **Done when:** each tool has schema and limit tests against a fixture repo.
 
-### 7. [~] `diagnose`: agent loop and output ([#29](https://github.com/ramesh130/perfettoagent/issues/29) tracer bullet, [#43](https://github.com/ramesh130/perfettoagent/issues/43) OpenAI)
+### 7. [x] `diagnose`: agent loop and output ([#29](https://github.com/ramesh130/perfettoagent/issues/29) tracer bullet, [#43](https://github.com/ramesh130/perfettoagent/issues/43) OpenAI)
 Build the Tool Runner loop, the frozen system prompt and structured output. #29 built the
 Anthropic loop, `diagnosis.json` and an offline end-to-end test (ADR-0022). #43 added the
 OpenAI loop and made `gpt-5.6-luna` the default; `--provider` and `--model` choose the
 model (ADR-0020). The done criterion below is met by a live `gpt-5.6-luna` run (ADR-0023).
 #30 added `diagnosis.md`, rendered from the verified `diagnosis.json` (ADR-0024), and #31
-the `--run-json` rules and `read_run_metadata` (ADR-0025). Still open: an `--effort` flag
-(#49). A live `claude-opus-5-5` run waits for an Anthropic key.
+the `--run-json` rules and `read_run_metadata` (ADR-0025), and #49 the `--effort` flag.
+A live `claude-opus-5-5` run waits for an Anthropic key; it does not gate this item.
 
 The prompt states the workflow: establish the metric delta, then localise it in the trace
 (thread, slice, span), then correlate it with the range, then blame.

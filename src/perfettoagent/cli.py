@@ -65,6 +65,15 @@ def build_parser() -> argparse.ArgumentParser:
         + ")",
     )
     dx.add_argument(
+        "--effort",
+        default=models.DEFAULT_EFFORT,
+        help=(
+            f"how hard the model reasons: {', '.join(models.SWEPT_EFFORTS)} "
+            f"(default: {models.DEFAULT_EFFORT}); a level the model does not list is "
+            "refused, never rounded"
+        ),
+    )
+    dx.add_argument(
         "--run-json",
         type=Path,
         help=(
@@ -183,6 +192,7 @@ def _diagnose(args: argparse.Namespace) -> int:
             metric=args.metric,
             provider=args.provider,
             model=args.model,
+            effort=args.effort,
             metadata=metadata,
         )
     except (
