@@ -9,6 +9,8 @@ carries:
   magic in text the model wrote are not interpreted;
 - `--end-of-options` before revisions and `--` before paths, so no text the model wrote
   can be read as an option (`--output=/tmp/x` is a path after `--`, not a flag).
+  `git blame` is the exception: given `--end-of-options`, it stops honouring `--`
+  (ADR-0018), so its caller passes a resolved sha without it.
 
 Revisions the model supplies must look like a sha before they reach git at all, and
 they are resolved through `cat-file --batch-check` on stdin, which never parses options.
@@ -63,10 +65,20 @@ class GitUnavailable(RuntimeError):
     that turns a GitError into a verdict on its input must let this one through."""
 
 
-def run_git(repo: Path, args: list[str], *, stdin: str | None = None) -> str:
-    """Runs `git <args>` read-only in `repo` and returns stdout; raises GitError."""
+def run_git(
+    repo: Path,
+    args: list[str],
+    *,
+    stdin: str | None = None,
+    ok_returncodes: tuple[int, ...] = (0,),
+) -> str:
+    """Runs `git <args>` read-only in `repo` and returns stdout; raises GitError.
+
+    `ok_returncodes` names the exit codes that are answers, not failures: `git grep`
+    exits 1 when nothing matched. ref: https://git-scm.com/docs/git-grep
+    """
     result = _run(repo, args, stdin)
-    if result.returncode != 0:
+    if result.returncode not in ok_returncodes:
         raise GitError(f"git {args[0]} failed: {result.stderr.strip()}")
     return result.stdout
 
@@ -137,7 +149,7 @@ def changed_paths(repo: Path, commit: str, path: str) -> list[str]:
     changed on the merged branch counts, which matches the merge being the commit that
     landed it. The side branch's own commits are in the range too, and can be cited.
     """
-    before = next(iter(parents(repo, commit)), None) or _empty_tree(commit)
+    before = diff_base(repo, commit)
     out = run_git(
         repo,
         [
@@ -154,6 +166,12 @@ def changed_paths(repo: Path, commit: str, path: str) -> list[str]:
         ],
     )
     return out.splitlines()
+
+
+def diff_base(repo: Path, commit: str) -> str:
+    """What `commit` (a full sha) is diffed against to say what it changed: its first
+    parent, or the empty tree for a root commit (see `changed_paths`)."""
+    return next(iter(parents(repo, commit)), None) or _empty_tree(commit)
 
 
 def _empty_tree(commit: str) -> str:
