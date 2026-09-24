@@ -116,9 +116,13 @@ Outputs:
   by its evidence in a fenced block. A reader should get the point from the first ten lines.
 - **Done when:** the first end-to-end diagnosis of the leak case passes the verifier.
 
-### 8. [ ] Second app
+### 8. [ ] Second app ([#34](https://github.com/ramesh130/perfettoagent/issues/34) plants and captures, [#35](https://github.com/ramesh130/perfettoagent/issues/35) cases)
 JetNews, from Google's `android/compose-samples` (Q1, ADR-0017, which maps where each plant
 goes). Apply the same five plants and capture clean pairs.
+- **Plants and captures (#34, ADR-0021):** done, in the private repo `ramesh130/jetnews-perf`.
+  Each plant is sized from JetNews's own clean noise, and three captures of each show it on its
+  expected metric. The leak's culprit adds a listener registration with no removal. Layout
+  thrash shows on `frame_ui_time_p95_ms` but not on `jank_frames_pct`.
 - **Done when:** its cases are in `evals/cases/`.
 
 ### 9. [ ] Eval runner and results
