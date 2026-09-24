@@ -89,16 +89,17 @@ def startup_a_trio() -> tuple[Path, Path, Path]:
 
 
 class JankTraces(NamedTuple):
-    """Four captures of one scripted scroll-and-tap scenario on one app, gzipped
+    """Five captures of one scripted scroll-and-tap scenario on one app, gzipped
     (ADR-0010). `baseline` and `rerun` are two captures of the same build, the clean
-    pair. `current_b` and `current_c` are each a capture after a different change, and
-    each is compared against `baseline`. Named for their role, never for what changed
-    (CLAUDE.md, eval integrity)."""
+    pair. `current_b`, `current_c` and `current_d` are each a capture after a different
+    change, and each is compared against `baseline`. Named for their role, never for
+    what changed (CLAUDE.md, eval integrity)."""
 
     baseline: Path
     rerun: Path
     current_b: Path
     current_c: Path
+    current_d: Path
 
 
 @pytest.fixture(scope="session")
@@ -108,4 +109,5 @@ def jank_traces() -> JankTraces:
         rerun=large_fixture("jank-a-rerun.perfetto-trace.gz"),
         current_b=large_fixture("jank-b-current.perfetto-trace.gz"),
         current_c=large_fixture("jank-c-current.perfetto-trace.gz"),
+        current_d=large_fixture("jank-d-current.perfetto-trace.gz"),
     )
