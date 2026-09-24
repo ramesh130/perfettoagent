@@ -11,7 +11,7 @@ this file, first record an ADR in `docs/adr/`.
 | Env / packaging | `uv` | `uv sync`, `uv run …`. The lockfile is committed. |
 | Lint / format | `ruff` | Rules `E, F, I, B, UP`. A Claude Code hook formats edited `.py` files. |
 | Tests | `pytest` + `pytest-socket` | `--disable-socket` is always on, so the suite must pass with no network. |
-| Large fixtures | Git LFS | Traces too large for plain git: test fixtures under `tests/fixtures/large/` (ADR-0004), new ones gzipped (ADR-0010), and the eval cases' traces under `evals/cases/`, which a default fetch leaves out (ADR-0015). Without LFS, the tests that need them skip. |
+| Large fixtures | Git LFS | Traces too large for plain git: test fixtures under `tests/fixtures/large/` (ADR-0004), new ones gzipped (ADR-0010), including the R8 mapping that goes with a minified capture (ADR-0019), and the eval cases' traces under `evals/cases/`, which a default fetch leaves out (ADR-0015). Without LFS, the tests that need them skip. |
 | CLI | `argparse` | Subcommands `diagnose`, `review`, `eval`, `tp`. |
 | CI | GitHub Actions | Runs `uv sync --locked`, ruff check, ruff format --check and pytest. Manual only (`workflow_dispatch`) until there is an Actions budget; until then run the same checks locally. |
 | License | Apache-2.0 | ADR-0002. |
@@ -69,7 +69,7 @@ ceiling, and each capped result says whether it was cut and gives the true total
 | `get_git_diff(sha, path, max_lines=400)` | Reports when output was truncated. |
 | `git_blame(path, line_start, line_end, at)` | At most **200 lines** (ADR-0018). |
 | `grep_repo(pattern, paths, max_hits=100, at)` | Implemented with `git grep`, on commit `at`, never the working tree (ADR-0018). |
-| `symbolize(frame)` | Java/Kotlin only, using `stack_profile_*` tables and `--mapping`. Returns `null` for native frames. |
+| `symbolize(frame, which)` | Java/Kotlin only, using `stack_profile_*` tables and `--mapping`. Returns `null` for native frames. `frame` is a `stack_profile_frame` id in the `which` trace, and each side has its own R8 mapping, read as text (ADR-0019). |
 | `read_run_metadata()` | Available only when `--run-json` was passed. |
 
 ## Evaluation

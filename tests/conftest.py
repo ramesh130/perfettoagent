@@ -111,3 +111,14 @@ def jank_traces() -> JankTraces:
         current_c=large_fixture("jank-c-current.perfetto-trace.gz"),
         current_d=large_fixture("jank-d-current.perfetto-trace.gz"),
     )
+
+
+@pytest.fixture(scope="session")
+def callstacks_a() -> tuple[Path, Path]:
+    """(trace, mapping): an 8-second callstack-sampling capture of a minified build,
+    and that build's R8 mapping, trimmed to the classes and methods the capture's Java
+    frames name. Both gzipped (ADR-0010, ADR-0019)."""
+    return (
+        large_fixture("callstacks-a.perfetto-trace.gz"),
+        large_fixture("callstacks-a.mapping.txt.gz"),
+    )

@@ -89,7 +89,7 @@ expected culprit and the patch live apart, in `evals/answers/` (ADR-0015). Case 
 **Exit:** the README has real numbers, `docs/postmortem.md` exists, and a two-minute
 recording (trace in, diagnosis out) is linked.
 
-### 6. [ ] Git and repo tools ([#24](https://github.com/ramesh130/perfettoagent/issues/24) git tools)
+### 6. [ ] Git and repo tools ([#24](https://github.com/ramesh130/perfettoagent/issues/24) git tools, [#25](https://github.com/ramesh130/perfettoagent/issues/25) `symbolize`)
 `get_git_log`, `get_git_diff`, `git_blame`, `grep_repo`, `symbolize` and
 `read_run_metadata`, with the limits in `tech-stack.md`.
 - **Done when:** each tool has schema and limit tests against a fixture repo.
