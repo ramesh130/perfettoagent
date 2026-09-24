@@ -7,9 +7,8 @@ __pycache__/
 dist/
 build/
 
-# Eval outputs: only the committed summary table is tracked (roadmap item 9)
-evals/results/*
-!evals/results/summary.md
+# Eval outputs are tracked, every run of them: README numbers must be checkable
+# against the files they came from (ADR-0027).
 
 # Local diagnose outputs
 out/

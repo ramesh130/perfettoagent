@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "startup_ttfd_ms",
+    "unit": "ms",
+    "baseline": 2077.310959,
+    "current": 2282.739626,
+    "delta": 205.42866700000013,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_full_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "d3c08a36dc94946928b95e758595f66aa083b2cd",
+    "files": [
+      "demo/src/main/kotlin/com/superplayer/demo/DownloadsScreen.kt"
+    ],
+    "attribution": "correlated"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Median cold-start TTFD increased from 2077.310959 ms over 20 starts in baseline to 2282.739626 ms over 20 starts in current, a 205.428667 ms regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH ranked AS (\n SELECT d.time_to_full_display/1e6 AS ttfd_ms,\n        row_number() OVER (ORDER BY d.time_to_full_display) AS r,\n        count(*) OVER () AS n\n FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id)\n WHERE s.startup_type='cold'\n)\nSELECT count(*) AS cold_starts, min(ttfd_ms) AS min_ttfd_ms, max(ttfd_ms) AS max_ttfd_ms,\n       (SELECT ttfd_ms FROM ranked WHERE r=(n+1)/2) AS median_ttfd_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH ranked AS (\n SELECT d.time_to_full_display/1e6 AS ttfd_ms,\n        row_number() OVER (ORDER BY d.time_to_full_display) AS r,\n        count(*) OVER () AS n\n FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id)\n WHERE s.startup_type='cold'\n)\nSELECT count(*) AS cold_starts, min(ttfd_ms) AS min_ttfd_ms, max(ttfd_ms) AS max_ttfd_ms,\n       (SELECT ttfd_ms FROM ranked WHERE r=(n+1)/2) AS median_ttfd_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The regression is localized to the app's main-thread UI work during the startup-to-full-display interval: traversal increased from 6985.105894 ms to 9086.851044 ms across the 20 starts, while draw-VRI[MainActivity] increased from 4735.372619 ms to 6804.722472 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n SELECT s.startup_id, s.ts, d.time_to_full_display AS ttfd\n FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id)\n WHERE s.startup_type='cold'\n), main_slices AS (\n SELECT c.startup_id, sum(CASE WHEN sl.name='traversal' THEN sl.dur ELSE 0 END)/1e6 AS traversal_ms,\n        sum(CASE WHEN sl.name='draw-VRI[MainActivity]' THEN sl.dur ELSE 0 END)/1e6 AS draw_ms\n FROM cold c JOIN process p ON p.name='com.superplayer.demo' AND p.start_ts<c.ts+c.ttfd/1.0 AND (p.end_ts IS NULL OR p.end_ts>c.ts)\n JOIN thread t ON t.upid=p.upid AND t.tid=p.pid JOIN thread_track tt ON tt.utid=t.utid JOIN slice sl ON sl.track_id=tt.id\n WHERE sl.ts>=c.ts AND sl.ts<c.ts+c.ttfd GROUP BY c.startup_id\n)\nSELECT count(*) AS starts, sum(traversal_ms) AS traversal_total_ms, sum(draw_ms) AS draw_total_ms FROM main_slices",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n SELECT s.startup_id, s.ts, d.time_to_full_display AS ttfd\n FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id)\n WHERE s.startup_type='cold'\n), main_slices AS (\n SELECT c.startup_id, sum(CASE WHEN sl.name='traversal' THEN sl.dur ELSE 0 END)/1e6 AS traversal_ms,\n        sum(CASE WHEN sl.name='draw-VRI[MainActivity]' THEN sl.dur ELSE 0 END)/1e6 AS draw_ms\n FROM cold c JOIN process p ON p.name='com.superplayer.demo' AND p.start_ts<c.ts+c.ttfd/1.0 AND (p.end_ts IS NULL OR p.end_ts>c.ts)\n JOIN thread t ON t.upid=p.upid AND t.tid=p.pid JOIN thread_track tt ON tt.utid=t.utid JOIN slice sl ON sl.track_id=tt.id\n WHERE sl.ts>=c.ts AND sl.ts<c.ts+c.ttfd GROUP BY c.startup_id\n)\nSELECT count(*) AS starts, sum(traversal_ms) AS traversal_total_ms, sum(draw_ms) AS draw_total_ms FROM main_slices",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "d3c08a36dc94946928b95e758595f66aa083b2cd is the correlated culprit: it changed the DownloadsScreen DownloadRow layout padding, and the trace shows substantially more Compose traversal and MainActivity drawing during startup. The trace does not identify DownloadRow directly, so this attribution is correlated rather than direct.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "d3c08a36dc94946928b95e758595f66aa083b2cd",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/DownloadsScreen.kt",
+          "commit": "d3c08a36dc94946928b95e758595f66aa083b2cd",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n SELECT s.startup_id, s.ts, d.time_to_full_display AS ttfd\n FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id)\n WHERE s.startup_type='cold'\n), main_slices AS (\n SELECT c.startup_id, sum(CASE WHEN sl.name='traversal' THEN sl.dur ELSE 0 END)/1e6 AS traversal_ms,\n        sum(CASE WHEN sl.name='draw-VRI[MainActivity]' THEN sl.dur ELSE 0 END)/1e6 AS draw_ms\n FROM cold c JOIN process p ON p.name='com.superplayer.demo' AND p.start_ts<c.ts+c.ttfd/1.0 AND (p.end_ts IS NULL OR p.end_ts>c.ts)\n JOIN thread t ON t.upid=p.upid AND t.tid=p.pid JOIN thread_track tt ON tt.utid=t.utid JOIN slice sl ON sl.track_id=tt.id\n WHERE sl.ts>=c.ts AND sl.ts<c.ts+c.ttfd GROUP BY c.startup_id\n)\nSELECT count(*) AS starts, sum(traversal_ms) AS traversal_total_ms, sum(draw_ms) AS draw_total_ms FROM main_slices",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n SELECT s.startup_id, s.ts, d.time_to_full_display AS ttfd\n FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id)\n WHERE s.startup_type='cold'\n), main_slices AS (\n SELECT c.startup_id, sum(CASE WHEN sl.name='traversal' THEN sl.dur ELSE 0 END)/1e6 AS traversal_ms,\n        sum(CASE WHEN sl.name='draw-VRI[MainActivity]' THEN sl.dur ELSE 0 END)/1e6 AS draw_ms\n FROM cold c JOIN process p ON p.name='com.superplayer.demo' AND p.start_ts<c.ts+c.ttfd/1.0 AND (p.end_ts IS NULL OR p.end_ts>c.ts)\n JOIN thread t ON t.upid=p.upid AND t.tid=p.pid JOIN thread_track tt ON tt.utid=t.utid JOIN slice sl ON sl.track_id=tt.id\n WHERE sl.ts>=c.ts AND sl.ts<c.ts+c.ttfd GROUP BY c.startup_id\n)\nSELECT count(*) AS starts, sum(traversal_ms) AS traversal_total_ms, sum(draw_ms) AS draw_total_ms FROM main_slices",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Both sides are single emulator captures on sdk_gphone64_arm64 with 20 cold starts each; TTFD includes rendering and system-pipeline effects.",
+    "The trace exposes generic traversal and draw slices, not a DownloadRow-specific slice or app callstack, so the commit attribution remains correlated rather than direct."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 7,
+    "citations_passed": 7,
+    "wall_time_s": 12.008
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "452a252f73624afc82772a907c177a5293854e2a8cb5d8ef6f3c44bca0c76eb9",
+      "current_sha256": "dad10584944012000ba685f04d0a81d65e6446d055c531a7d2a37a6f6558ad89",
+      "range": "93c75ee300d0557f3a7e89e5958dd5c7f80d7083..3c45fa773a148f0cd3f45cdf56318eb3dc52e6c0"
+    },
+    "tool_calls": 86,
+    "usage": {
+      "input_tokens": 78,
+      "output_tokens": 19371,
+      "cache_read_input_tokens": 1595584,
+      "cache_creation_input_tokens": 100051
+    },
+    "usd": 0.080185,
+    "wall_time_s": 544.285
+  }
+}

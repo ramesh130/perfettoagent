@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "frame_p95_ms",
+    "unit": "ms",
+    "baseline": 67.812916,
+    "current": 73.252833,
+    "delta": 5.439916999999994,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "low",
+  "culprit": {
+    "commit": "7fd3626107135436b97973da12915e1e13f76255",
+    "files": [
+      "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c2",
+      "text": "The affected application is com.superplayer.demo, and the frame-drawing thread is the app's main thread. The current trace has fewer recorded frames but more App Deadline Missed frames.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT p.name AS process_name, p.pid, t.name AS thread_name, t.tid,\n  count(*) AS frame_count,\n  min(dur) / 1e6 AS min_ms,\n  avg(dur) / 1e6 AS avg_ms,\n  max(dur) / 1e6 AS max_ms,\n  sum(jank_type GLOB '*App Deadline Missed*') AS app_deadline_missed\nFROM frames f\nJOIN process p ON p.upid = f.upid\nJOIN thread t ON t.utid = f.ui_thread_utid\nGROUP BY p.name, p.pid, t.name, t.tid\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT p.name AS process_name, p.pid, t.name AS thread_name, t.tid,\n  count(*) AS frame_count,\n  min(dur) / 1e6 AS min_ms,\n  avg(dur) / 1e6 AS avg_ms,\n  max(dur) / 1e6 AS max_ms,\n  sum(jank_type GLOB '*App Deadline Missed*') AS app_deadline_missed\nFROM frames f\nJOIN process p ON p.upid = f.upid\nJOIN thread t ON t.utid = f.ui_thread_utid\nGROUP BY p.name, p.pid, t.name, t.tid\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "On the app's main thread, compose:lazy:prefetch:compose increased from 270.720838 ms across 57 slices to 304.11613 ms across 61 slices.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (SELECT DISTINCT ui_thread_utid AS utid FROM frames)\nSELECT s.name, count(*) AS occurrences, sum(s.dur) / 1e6 AS total_ms,\n  max(s.dur) / 1e6 AS max_ms\nFROM slice s JOIN thread_track tt ON tt.id = s.track_id\nWHERE tt.utid IN (SELECT utid FROM main_thread)\n  AND s.depth = 0 AND s.dur > 0\nGROUP BY s.name ORDER BY total_ms DESC LIMIT 30\n",
+          "row_count": 30,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (SELECT DISTINCT ui_thread_utid AS utid FROM frames)\nSELECT s.name, count(*) AS occurrences, sum(s.dur) / 1e6 AS total_ms,\n  max(s.dur) / 1e6 AS max_ms\nFROM slice s JOIN thread_track tt ON tt.id = s.track_id\nWHERE tt.utid IN (SELECT utid FROM main_thread)\n  AND s.depth = 0 AND s.dur > 0\nGROUP BY s.name ORDER BY total_ms DESC LIMIT 30\n",
+          "row_count": 30,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The corresponding playback-thread drainAndFeed work also increased: from 9525.973902 ms on SuperPlayer:Poo in the baseline to 9757.118609 ms in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT t.name AS thread_name, p.name AS process_name, count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s JOIN thread_track tt ON tt.id=s.track_id JOIN thread t ON t.utid=tt.utid JOIN process p ON p.upid=t.upid\nWHERE s.name='drainAndFeed' AND s.dur>0\nGROUP BY p.name,t.name ORDER BY total_ms DESC",
+          "row_count": 2,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT t.name AS thread_name, p.name AS process_name, count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s JOIN thread_track tt ON tt.id=s.track_id JOIN thread t ON t.utid=tt.utid JOIN process p ON p.upid=t.upid\nWHERE s.name='drainAndFeed' AND s.dur>0\nGROUP BY p.name,t.name ORDER BY total_ms DESC",
+          "row_count": 2,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "The range commit 7fd3626107135436b97973da12915e1e13f76255 changes FeedScreen's FeedRow player-acquisition code, which is the code path represented by the feed trace evidence; it is therefore the likely direct culprit.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT name, count(*) AS occurrences, sum(dur)/1e6 AS total_ms, max(dur)/1e6 AS max_ms FROM slice WHERE dur > 0 AND name GLOB '*FeedScreen*' GROUP BY name ORDER BY total_ms DESC",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "7fd3626107135436b97973da12915e1e13f76255",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "7fd3626107135436b97973da12915e1e13f76255",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Only one capture is available for each side, so the frame-percentile and scheduling differences may include run-to-run noise.",
+    "The capture is from an emulator (sdk_gphone64_arm64) using a non-debuggable benchmark build; the trace has no stack-profile samples to prove method-level CPU causality."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c1",
+      "text": "The UI frame p95 worsened from 67.812916 ms in the baseline to 73.252833 ms in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 11 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+        }
+      ],
+      "reason": "citation 2: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 11 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+    }
+  ],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 9,
+    "wall_time_s": 12.68
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "118e8dc0a31000cebe5906815a5d05ab5d4800f6e10fa86d6a8ba12a16d0c679",
+      "current_sha256": "cd2ec0387ca952609cc24f410eb65375548dee094710a01f220763527e19d298",
+      "range": "21ec3d1199aaa3abc009d92e8c22775fe2f834e8..a5bc871eb640dbe4e548fa93da2fb34263b97abf"
+    },
+    "tool_calls": 53,
+    "usage": {
+      "input_tokens": 36,
+      "output_tokens": 12486,
+      "cache_read_input_tokens": 227791,
+      "cache_creation_input_tokens": 40093
+    },
+    "usd": 0.029569,
+    "wall_time_s": 228.925
+  }
+}
