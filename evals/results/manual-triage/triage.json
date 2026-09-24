@@ -1,0 +1,32 @@
+{
+  "schema": 1,
+  "measured": false,
+  "basis": "Assumed, not measured. The project owner asked for the sweep to proceed without waiting for the timed manual triage of issue #27, with a suitable assumed number. Each of the five planted superPlayer cases is assumed to take 60 minutes by hand, from opening the two traces to naming a commit, and the culprit is assumed found. The mission's own estimate is 'hours'; one hour each is the conservative end of it, so the comparison cannot flatter the agent by overstating the manual time. Replace this file with measured times when #27 is done.",
+  "cases": [
+    {
+      "case": "275adbfb",
+      "minutes": 60,
+      "culprit_found": true
+    },
+    {
+      "case": "462439ff",
+      "minutes": 60,
+      "culprit_found": true
+    },
+    {
+      "case": "69dc18c7",
+      "minutes": 60,
+      "culprit_found": true
+    },
+    {
+      "case": "c89d5055",
+      "minutes": 60,
+      "culprit_found": true
+    },
+    {
+      "case": "f21c443c",
+      "minutes": 60,
+      "culprit_found": true
+    }
+  ]
+}

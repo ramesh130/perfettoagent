@@ -149,7 +149,7 @@ Report:
 | Attribution rate | Detected cases where `culprit.commit` equals the planted sha |
 | False-positive rate | Clean pairs where the verdict is `regression` |
 | Citation validity | Citations that pass the verifier before dropping, as a share of all citations |
-| Time to diagnosis | Agent wall time vs. timed manual triage on the same five cases |
+| Time to diagnosis | Agent wall time vs. timed manual triage on the same five cases (assumed until #27 measures it, ADR-0030) |
 | Cost and tokens per trace | USD, input, output and cache-read tokens for each model and effort level |
 
 Never score on the model's own confidence field.
