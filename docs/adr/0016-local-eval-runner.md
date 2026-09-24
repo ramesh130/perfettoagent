@@ -16,13 +16,12 @@ Open question Q2 asked whether `evalharness` (`pareto-eval`) accepts a per-case 
 
 - **A transcript without results.** `Output.tool_calls` is a tuple of `ToolCall(name, arguments)`. It holds no tool results, no order of turns and no stop reason. `runner.run_suite` builds one `Request` per task and calls `Provider.complete` once. Its providers send one user message, and nothing runs a tool and returns its result. So a whole diagnosis could reach a scorer only by wrapping the agent loop in a custom `Provider` and returning the final `diagnosis.json` as `text`.
 - **Only the built-in scorers.** `SCORERS` in `scorers/__init__.py` is a closed dict: `exact_match`, `tool_call` and `llm_judge`. `suite.py` checks names against it at load time, so a suite cannot name a scorer of its own. `tool_call.score` answers one question: did some call match `expected_tool` and `expected_args`? That is not attribution. The culprit is in the diagnosis, not in a tool's arguments.
-- **One float per task.** A scorer returns one float. `aggregate.aggregate` makes `quality` their mean, `cost_usd` their sum and `latency_p95_ms` their 95th percentile. Item 9's rates do not share a denominator:
+- **One float per task.** A scorer returns one float. `aggregate.aggregate` makes `quality` their mean, `cost_usd` their sum and `latency_p95_ms` their 95th percentile. Item 9's rates do not share a denominator, so a mean over all cases gives none of them:
   - detection counts planted cases;
   - attribution counts only the detected ones;
   - the false-positive rate counts clean pairs;
   - citation validity counts citations, not cases.
-  A mean over all cases gives none of them.
-- **One run per case.** `aggregate._reject_duplicate_tasks` refuses a second row for the same task. Item 9 runs every case three times and reports the spread. `evalharness`'s own `ROADMAP.md` and `docs/eval-framework.md` list repeated runs as not built.
+- **One run per case.** `aggregate._reject_duplicate_tasks` refuses a second row for the same task. Item 9 runs every case three times and reports the spread. `evalharness`'s own `docs/eval-framework.md` lists repeated runs as a next step, not built.
 
 ## The gap it leaves
 
@@ -32,6 +31,7 @@ A local runner has to do each of these, and `evalharness` does none of them toda
 - score from `load_expected` and the verifier's output, and not from the model's confidence field;
 - compute detection, attribution and false-positive rates and citation validity, each over its own denominator;
 - run each case three times and report the spread;
+- report time to diagnosis as agent wall time next to timed manual triage. `evalharness` reports a p95 latency per variant, which is neither;
 - record USD, input, output and cache-read tokens per effort level. `evalharness` does carry cache counters on `Completion`, but its price table has no `claude-opus-5-5`.
 
 Two things it does fit. Per-row cost, tokens and latency map onto `RunResult`. Its task files hold the expected answers, but the runner sends only `Task.input` to the model, so answers would not leak. A suite would still have to be generated from `evals/answers/`, to keep the answers apart (ADR-0015).
