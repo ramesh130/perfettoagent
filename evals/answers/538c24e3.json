@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "verdict": "no_regression",
+  "metrics": [],
+  "culprit": null,
+  "regression": null,
+  "plant": null,
+  "patch": null,
+  "provenance": {
+    "source_tree": "f756bb2642f4f83574280e5f42ee5838e02ea81f",
+    "baseline_trace": "jetnews-perf runs/20260924T113026Z",
+    "current_trace": "jetnews-perf runs/20260924T113151Z"
+  }
+}

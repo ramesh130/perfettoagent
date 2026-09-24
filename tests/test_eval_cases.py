@@ -30,9 +30,19 @@ from perfettoagent.metrics import list_metrics
 
 CASES = list_cases()
 
-# Roadmap item 5: five planted cases, and at least as many clean pairs.
+# Each fixture repo is one app (ADR-0015, ADR-0028).
+APPS = ("superplayer", "jetnews")
+
+# Roadmap items 5 and 8: per app, five planted cases, and at least as many clean pairs.
 PLANTED = 5
 MIN_CLEAN = 5
+
+
+def app_of(case_id: str) -> str:
+    return json.loads((EVALS_DIR / "cases" / case_id / "inputs.json").read_text())[
+        "repo"
+    ]
+
 
 # Roadmap item 5 and the issue: each range holds at least this many commits besides the
 # plant, so attribution is a search over the range and not a lookup.
@@ -63,7 +73,8 @@ HINT_WORDS = (
 def hints_in(text: str, answers: list[dict]) -> list[str]:
     """Every hint word, plant name or regression name that `text` contains."""
     names = [a["plant"] for a in answers if a["plant"]]
-    names += [a["regression"] for a in answers if a["regression"]]
+    # Both apps share the roadmap's regression names: each is looked for once.
+    names += dict.fromkeys(a["regression"] for a in answers if a["regression"])
     found = [w for w in HINT_WORDS if re.search(rf"\b{w}", text, re.IGNORECASE)]
     return found + [n for n in names if n.lower() in text.lower()]
 
@@ -98,8 +109,9 @@ def range_commits(case_id: str, repo: Path) -> list[str]:
     return git(repo, "rev-list", f"{inputs.range_base}..{inputs.range_head}").split()
 
 
-def test_five_planted_cases_and_at_least_five_clean_pairs():
-    expected = [load_expected(c) for c in CASES]
+@pytest.mark.parametrize("app", APPS)
+def test_five_planted_cases_and_at_least_five_clean_pairs_per_app(app):
+    expected = [load_expected(c) for c in CASES if app_of(c) == app]
     planted = [e for e in expected if e.verdict == "regression"]
     clean = [e for e in expected if e.verdict == "no_regression"]
     assert len(planted) == PLANTED
@@ -108,8 +120,16 @@ def test_five_planted_cases_and_at_least_five_clean_pairs():
     assert all(e.culprit is None and e.metrics == () for e in clean)
 
 
-def test_each_planted_case_is_a_different_plant(answers):
-    plants = [a["plant"] for a in answers if a["plant"]]
+def test_every_case_is_one_of_the_apps():
+    assert {app_of(c) for c in CASES} == set(APPS)
+
+
+@pytest.mark.parametrize("app", APPS)
+def test_each_planted_case_of_an_app_is_a_different_plant(app, answers):
+    by_id = dict(zip(CASES, answers, strict=True))
+    plants = [
+        by_id[c]["plant"] for c in CASES if app_of(c) == app and by_id[c]["plant"]
+    ]
     assert len(set(plants)) == PLANTED
 
 

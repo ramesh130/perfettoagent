@@ -1,0 +1,57 @@
+diff --git a/app/src/main/java/com/example/jetnews/JetnewsApplication.kt b/app/src/main/java/com/example/jetnews/JetnewsApplication.kt
+index f248317..2a190e9 100644
+--- a/app/src/main/java/com/example/jetnews/JetnewsApplication.kt
++++ b/app/src/main/java/com/example/jetnews/JetnewsApplication.kt
+@@ -17,12 +17,20 @@
+ package com.example.jetnews
+ 
+ import android.app.Application
++import android.util.Log
+ import com.example.jetnews.data.AppContainer
+ import com.example.jetnews.data.AppContainerImpl
++import java.io.File
++import java.util.zip.CRC32
+ 
+ class JetnewsApplication : Application() {
+     companion object {
+         const val JETNEWS_APP_URI = "https://developer.android.com/jetnews"
++
++        private const val TAG = "JetnewsApplication"
++        private const val ARTICLE_CACHE = "articles.cache"
++        private const val ARTICLE_CACHE_BYTES = 768L * 1024 * 1024
++        private const val BLOCK_BYTES = 64 * 1024
+     }
+ 
+     // AppContainer instance used by the rest of classes to obtain dependencies
+@@ -30,6 +38,31 @@ class JetnewsApplication : Application() {
+ 
+     override fun onCreate() {
+         super.onCreate()
++        verifyArticleCache()
+         container = AppContainerImpl(this)
+     }
++
++    /**
++     * Checks the offline article cache before any repository reads it, so a cache that a crash left
++     * half-written is found, and rebuilt, at launch rather than while a post is open.
++     */
++    private fun verifyArticleCache() {
++        val cache = File(filesDir, ARTICLE_CACHE)
++        if (!cache.isFile || cache.length() != ARTICLE_CACHE_BYTES) {
++            val block = ByteArray(BLOCK_BYTES) { it.toByte() }
++            cache.outputStream().use { output ->
++                repeat((ARTICLE_CACHE_BYTES / BLOCK_BYTES).toInt()) { output.write(block) }
++            }
++        }
++        val crc = CRC32()
++        val buffer = ByteArray(BLOCK_BYTES)
++        cache.inputStream().use { input ->
++            while (true) {
++                val read = input.read(buffer)
++                if (read < 0) break
++                crc.update(buffer, 0, read)
++            }
++        }
++        Log.i(TAG, "article cache checked, crc32 %08x".format(crc.value))
++    }
+ }

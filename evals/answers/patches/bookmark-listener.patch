@@ -1,0 +1,105 @@
+diff --git a/app/src/main/java/com/example/jetnews/data/posts/PostsRepository.kt b/app/src/main/java/com/example/jetnews/data/posts/PostsRepository.kt
+index d880a36..9e9d207 100644
+--- a/app/src/main/java/com/example/jetnews/data/posts/PostsRepository.kt
++++ b/app/src/main/java/com/example/jetnews/data/posts/PostsRepository.kt
+@@ -46,6 +46,12 @@ interface PostsRepository {
+      */
+     fun observePostsFeed(): Flow<PostsFeed?>
+ 
++    /**
++     * Call [listener] with the current favorites, and again on every change. For a caller that is not
++     * in a coroutine, such as a composable that shows one post's bookmark.
++     */
++    fun addFavoritesListener(listener: (Set<String>) -> Unit)
++
+     /**
+      * Toggle a postId to be a favorite or not.
+      */
+diff --git a/app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt b/app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt
+index aa95a36..7067825 100644
+--- a/app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt
++++ b/app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt
+@@ -57,9 +57,17 @@ class BlockingFakePostsRepository : PostsRepository {
+     }
+ 
+     override fun observeFavorites(): Flow<Set<String>> = favorites
++
++    private val favoritesListeners = mutableListOf<(Set<String>) -> Unit>()
++
++    override fun addFavoritesListener(listener: (Set<String>) -> Unit) {
++        favoritesListeners += listener
++        listener(favorites.value)
++    }
+     override fun observePostsFeed(): Flow<PostsFeed?> = postsFeed
+ 
+     override suspend fun toggleFavorite(postId: String) {
+         favorites.update { it.addOrRemove(postId) }
++        favoritesListeners.forEach { it(favorites.value) }
+     }
+ }
+diff --git a/app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt b/app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt
+index 939e095..97e3587 100644
+--- a/app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt
++++ b/app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt
+@@ -67,10 +67,18 @@ class FakePostsRepository : PostsRepository {
+     override fun observeFavorites(): Flow<Set<String>> = favorites
+     override fun observePostsFeed(): Flow<PostsFeed?> = postsFeed
+ 
++    private val favoritesListeners = mutableListOf<(Set<String>) -> Unit>()
++
++    override fun addFavoritesListener(listener: (Set<String>) -> Unit) {
++        favoritesListeners += listener
++        listener(favorites.value)
++    }
++
+     override suspend fun toggleFavorite(postId: String) {
+         favorites.update {
+             it.addOrRemove(postId)
+         }
++        favoritesListeners.forEach { it(favorites.value) }
+     }
+ 
+     // used to drive "random" failure in a predictable pattern, making the first request always
+diff --git a/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt b/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt
+index 57cafe7..f2fc451 100644
+--- a/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt
++++ b/app/src/main/java/com/example/jetnews/ui/home/PostCards.kt
+@@ -36,6 +36,7 @@ import androidx.compose.runtime.remember
+ import androidx.compose.runtime.setValue
+ import androidx.compose.ui.Modifier
+ import androidx.compose.ui.draw.clip
++import androidx.compose.ui.platform.LocalContext
+ import androidx.compose.ui.res.painterResource
+ import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.semantics.CustomAccessibilityAction
+@@ -45,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
+ import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.ui.tooling.preview.Preview
+ import androidx.compose.ui.unit.dp
++import com.example.jetnews.JetnewsApplication
+ import com.example.jetnews.R
+ import com.example.jetnews.data.posts.impl.post3
+ import com.example.jetnews.model.Post
+@@ -88,7 +90,12 @@ fun PostTitle(post: Post) {
+ 
+ @Composable
+ fun PostCardSimple(post: Post, navigateToPost: (String) -> Unit, isFavorite: Boolean, onToggleFavorite: () -> Unit) {
+-    val bookmarkAction = stringResource(if (isFavorite) R.string.unbookmark else R.string.bookmark)
++    // The bookmark follows the repository directly, so a tap shows at once rather than after the
++    // feed's state has come back round through the view model.
++    var bookmarked by remember { mutableStateOf(isFavorite) }
++    val repository = (LocalContext.current.applicationContext as JetnewsApplication).container.postsRepository
++    remember(post.id) { repository.addFavoritesListener { bookmarked = post.id in it } }
++    val bookmarkAction = stringResource(if (bookmarked) R.string.unbookmark else R.string.bookmark)
+     Row(
+         modifier = Modifier
+             .clickable(onClick = { navigateToPost(post.id) })
+@@ -117,7 +124,7 @@ fun PostCardSimple(post: Post, navigateToPost: (String) -> Unit, isFavorite: Boo
+             AuthorAndReadTime(post)
+         }
+         BookmarkButton(
+-            isBookmarked = isFavorite,
++            isBookmarked = bookmarked,
+             onClick = onToggleFavorite,
+             // Remove button semantics so action can be handled at row level
+             modifier = Modifier

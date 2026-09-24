@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "commit": "87e9f4098fc8e5f29e9bc309aa75db0ea7692e44",
+  "tree_dirty": false,
+  "debuggable": true,
+  "build_type": "debug",
+  "device": {
+    "model": "sdk_gphone64_arm64",
+    "sdk": "36",
+    "emulator": true
+  }
+}

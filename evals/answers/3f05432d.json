@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "verdict": "regression",
+  "metrics": [
+    "frame_ui_time_p95_ms"
+  ],
+  "culprit": "e15d633e79d2608f074e9c50a18f3064e15830d7",
+  "regression": "Layout thrash",
+  "plant": "feed-row-fit",
+  "patch": "patches/feed-row-fit.patch",
+  "provenance": {
+    "source_tree": "f756bb2642f4f83574280e5f42ee5838e02ea81f",
+    "baseline_trace": "jetnews-perf runs/20260924T112635Z",
+    "current_trace": "jetnews-perf runs/20260924T115456Z"
+  }
+}

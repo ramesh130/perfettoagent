@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "verdict": "regression",
+  "metrics": [
+    "main_thread_blocked_ms"
+  ],
+  "culprit": "9d695fef3c759e53d1bb01327b328a5d5e30bb87",
+  "regression": "Synchronous sleep",
+  "plant": "bookmark-hold",
+  "patch": "patches/bookmark-hold.patch",
+  "provenance": {
+    "source_tree": "f756bb2642f4f83574280e5f42ee5838e02ea81f",
+    "baseline_trace": "jetnews-perf runs/20260924T112957Z",
+    "current_trace": "jetnews-perf runs/20260924T114105Z"
+  }
+}

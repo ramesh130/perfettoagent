@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "repo": "jetnews",
+  "range": {
+    "base": "62fbee606d77bd491d8bd8eb9d347f49df32d463",
+    "head": "87e9f4098fc8e5f29e9bc309aa75db0ea7692e44"
+  }
+}

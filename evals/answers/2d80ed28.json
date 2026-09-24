@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "verdict": "regression",
+  "metrics": [
+    "frame_ui_time_p95_ms",
+    "gc_time_ms"
+  ],
+  "culprit": "bcd3ba1e926293a8681b6246ecdd271b5beb1592",
+  "regression": "Allocation storm",
+  "plant": "feed-card-grain",
+  "patch": "patches/feed-card-grain.patch",
+  "provenance": {
+    "source_tree": "f756bb2642f4f83574280e5f42ee5838e02ea81f",
+    "baseline_trace": "jetnews-perf runs/20260924T115742Z",
+    "current_trace": "jetnews-perf runs/20260924T120949Z"
+  }
+}
