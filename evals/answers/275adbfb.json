@@ -4,7 +4,7 @@
   "metrics": [
     "startup_ttid_ms"
   ],
-  "culprit": "08f14fc956f99b7fe7fd9600c410033491a4f6fb",
+  "culprit": "fb30a9c67862bd42f9d8fab36f6c8dff37069417",
   "regression": "Main-thread I/O on startup",
   "plant": "startup-main-thread-io",
   "patch": "patches/startup-main-thread-io.patch",

@@ -4,7 +4,7 @@
   "metrics": [
     "heap_growth_objects_by_class"
   ],
-  "culprit": "329a445929ae3048995203fb7e1a198a186a2018",
+  "culprit": "6efb841e56d8071cddf03a32002d8413507b2797",
   "regression": "Listener leak",
   "plant": "listener-leak",
   "patch": "patches/listener-leak.patch",

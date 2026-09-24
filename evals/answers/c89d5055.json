@@ -5,7 +5,7 @@
     "frame_ui_time_p95_ms",
     "jank_frames_pct"
   ],
-  "culprit": "ce749addf1fee4dc8068a0ef48f6f516af216c37",
+  "culprit": "18fab3f92d84e00498a5a6891125dd23bd063820",
   "regression": "Layout thrash",
   "plant": "feed-row-remeasure",
   "patch": "patches/feed-row-remeasure.patch",

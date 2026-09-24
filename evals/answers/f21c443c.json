@@ -5,7 +5,7 @@
     "frame_ui_time_p95_ms",
     "gc_time_ms"
   ],
-  "culprit": "df89961db063808b178a2890a1c8c626173469a4",
+  "culprit": "60be8b69bd6967b234ecb466b5cd1312df2c9854",
   "regression": "Allocation storm",
   "plant": "feed-grain-allocations",
   "patch": "patches/feed-grain-allocations.patch",

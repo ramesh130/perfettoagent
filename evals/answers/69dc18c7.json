@@ -4,7 +4,7 @@
   "metrics": [
     "main_thread_blocked_ms"
   ],
-  "culprit": "ef3f1181af6819adced9c0aaa7728d11c30ca205",
+  "culprit": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
   "regression": "Synchronous sleep",
   "plant": "feed-tap-sleep",
   "patch": "patches/feed-tap-sleep.patch",

@@ -1,5 +1,5 @@
 diff --git a/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt b/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt
-index 9c05959..65da3f3 100644
+index 803c818..d8ccdfb 100644
 --- a/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt
 +++ b/superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt
 @@ -527,11 +527,6 @@ public class SuperPlayer private constructor(
