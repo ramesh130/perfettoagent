@@ -71,9 +71,9 @@ Every tool is a Python function with a strict JSON schema (`strict: true`,
 
 ## Evaluation
 
-- Run evals through `evalharness` (`pareto-eval`) where practical. If integrating costs more
-  than a day, use a local runner in `evals/run_eval.py` and record the gap in
-  an ADR.
+- Run evals with a local runner, `evals/run_eval.py` (ADR-0016). `evalharness`
+  (`pareto-eval`) was checked first. Its scorer cannot express item 9's rates or repeated
+  runs, and integrating would cost more than a day. The ADR records the gap.
 
 ## Not allowed
 
