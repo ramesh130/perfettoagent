@@ -21,7 +21,8 @@
 -- heap_growth_objects_by_class measures from heap dumps instead.
 --
 -- No fixture has heapprofd data (ADR-0014), so the value path below is untested against
--- a real profile; the NULL path is tested on every fixture. NULL rather than 0: with no
+-- a real profile; the NULL path is tested on every fixture, in
+-- tests/test_metrics_thread_memory.py. NULL rather than 0: with no
 -- samples, nothing was measured, which is not the same as nothing unfreed.
 SELECT
   CASE WHEN count(*) = 0 THEN NULL ELSE sum(size) END AS value

@@ -24,6 +24,9 @@
 -- Measured on all 15 jank captures (ADR-0013): 214.3-348.3 ms over 336-400 calls on the
 -- six clean runs.
 --
+-- Checked against the main thread's `binder transaction` slices, summed in Python, in
+-- tests/test_metrics_thread_memory.py.
+--
 -- NULL rather than 0 when no process in the trace made a binder transaction: then the
 -- binder_driver category was off. A trace with transactions, none of them the main
 -- thread's, reads 0.

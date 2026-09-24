@@ -55,7 +55,8 @@ CAPTURES = tuple(KNOWN)
 
 # GC time as the scenario's own report gives it (superPlayer PR #392's capture table,
 # from devicelab's jank/sql/gc.sql: every top-level `*GC` slice on the app's
-# HeapTaskDaemon, in whole ms). Only the recorded output is copied in; nothing here runs
+# HeapTaskDaemon), rounded by hand from its one-decimal output to whole ms: 13632.5 was
+# written 13632, half down. Only the recorded output is copied in; nothing here runs
 # it, so this checks the known answers against a second derivation made by hand.
 DEVICELAB_GC_MS = {
     "baseline": 259,
@@ -132,8 +133,8 @@ def test_a_baseline_gives_the_delta(trace_processor, jank_traces, alone):
 
 def test_gc_matches_the_scenarios_own_report():
     for capture, ms in DEVICELAB_GC_MS.items():
-        # Within a ms: the table drops the fraction (13632.5 is written 13632).
-        assert abs(KNOWN[capture][GC] - ms) < 1, capture
+        # Within the rounding: the one-decimal value, rounded either way at .5.
+        assert abs(round(KNOWN[capture][GC], 1) - ms) <= 0.5, capture
 
 
 def test_main_thread_blocked_shows_the_change_in_current_d(alone):
@@ -152,6 +153,15 @@ def test_gc_time_shows_the_change_in_current_b(alone):
     assert _delta(alone, GC, "current_b") > 2 * CLEAN_SPREAD[GC]
     # current_d's change is not in GC time: its delta, 177.5 ms, is inside the spread.
     assert abs(_delta(alone, GC, "current_d")) < CLEAN_SPREAD[GC]
+
+
+def test_what_else_moves(alone):
+    # Recorded so that no later claim reads them as clean (ADR-0013): current_c moves
+    # main_thread_blocked_ms by more than its clean spread (+48.6 ms, 1.6 times), and
+    # gc_time_ms by more than current_b does (+13.4 s against +10.1 s), so GC time alone
+    # cannot tell those two changes apart.
+    assert _delta(alone, BLOCKED, "current_c") > CLEAN_SPREAD[BLOCKED]
+    assert _delta(alone, GC, "current_c") > _delta(alone, GC, "current_b")
 
 
 def test_the_clean_pair_shows_no_meaningful_delta(alone):
@@ -257,15 +267,22 @@ def test_sql_used_reproduces_every_cited_number(alone, trace_processor, jank_tra
 # --- No data: NULL with a reason, never 0 (ADR-0014). -------------------------------
 
 
-@pytest.mark.parametrize("capture", CAPTURES)
+# Every large fixture, as (conftest fixture, index into what it returns).
+EVERY_FIXTURE = [
+    *(("jank_traces", i) for i in range(5)),
+    *(("heap_a_pair", i) for i in range(2)),
+    *(("startup_a_trio", i) for i in range(3)),
+]
+
+
+@pytest.mark.parametrize(("fixture", "index"), EVERY_FIXTURE)
 def test_native_unfreed_reads_no_data_on_every_fixture(
-    trace_processor, jank_traces, capture
+    request, trace_processor, fixture, index
 ):
     # No fixture was captured with heapprofd, so none has a native heap profile: the
-    # metric says so instead of reporting 0 bytes unfreed.
-    result = compute_metric(
-        NATIVE, current=getattr(jank_traces, capture), binary=trace_processor
-    )
+    # metric says so instead of reporting 0 bytes unfreed (ADR-0014).
+    trace = request.getfixturevalue(fixture)[index]
+    result = compute_metric(NATIVE, current=trace, binary=trace_processor)
     assert (result["baseline"], result["current"], result["delta"]) == (
         None,
         None,
@@ -276,9 +293,7 @@ def test_native_unfreed_reads_no_data_on_every_fixture(
     # And the citation re-runs to that same NULL, a row the verifier can find.
     statement, modules = split_includes(result["sql_used"])
     assert modules == []
-    rerun = query_trace(
-        statement, getattr(jank_traces, capture), binary=trace_processor
-    )
+    rerun = query_trace(statement, trace, binary=trace_processor)
     assert rerun["rows"] == [[None]]
 
 

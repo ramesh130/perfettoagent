@@ -24,8 +24,11 @@
 -- that is the app's code.
 --
 -- Measured on all 15 jank captures (ADR-0013): 6-8 collections and 172.0-428.5 ms on
--- the six clean runs, 134-149 collections and 9484.5-11044.5 ms on the three that
--- allocate a million boxed floats in each scrolled frame.
+-- the six clean runs, 134-149 collections and 9484.5-11044.5 ms on the three runs of
+-- the plant this metric is expected to catch.
+--
+-- Checked against the app's top-level `*GC` slices on HeapTaskDaemon, summed in
+-- Python, in tests/test_metrics_thread_memory.py.
 --
 -- NULL rather than 0 when no process in the trace collected at all: then the `dalvik`
 -- category was off and nothing can be said. A trace with collections, none of them the
