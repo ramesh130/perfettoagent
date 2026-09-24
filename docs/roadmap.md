@@ -115,8 +115,8 @@ Outputs:
 - **Done when:** the first end-to-end diagnosis of the leak case passes the verifier.
 
 ### 8. [ ] Second app
-Pick Now in Android, Tivi or Signal-Android (see Q1). Apply the same five plants and capture
-clean pairs.
+JetNews, from Google's `android/compose-samples` (Q1, ADR-0017, which maps where each plant
+goes). Apply the same five plants and capture clean pairs.
 - **Done when:** its cases are in `evals/cases/`.
 
 ### 9. [ ] Eval runner and results
@@ -149,8 +149,11 @@ walkthrough.
 
 Settle each one by recording an ADR in `docs/adr/`.
 
-1. **Q1.** Which open-source app builds fastest on Apple silicon with the API 36 emulator?
-   Decide by trying, time-boxed to two hours. Blocks item 8.
+1. **Q1.** ~~Which open-source app builds fastest on Apple silicon with the API 36 emulator?~~
+   **Resolved (ADR-0017):** JetNews, from Google's `android/compose-samples` (Apache-2.0).
+   The user's expense tracker, tried first, had its whole UI in one file and an empty list.
+   JetNews built unchanged in 156 s cold, with Java processes peaking at 2.4 GB, and its home
+   feed scrolls offline. `android_startups` found both cold starts in its trace.
 2. **Q2.** ~~Does `evalharness` accept a per-case tool-call transcript as a quality input, or is
    a local runner needed?~~
    **Resolved (ADR-0016):** a local runner. Its scorer sees tool calls without their results
