@@ -89,9 +89,9 @@ expected culprit and the patch live apart, in `evals/answers/` (ADR-0015). Case 
 **Exit:** the README has real numbers, `docs/postmortem.md` exists, and a two-minute
 recording (trace in, diagnosis out) is linked.
 
-### 6. [ ] Git and repo tools ([#24](https://github.com/ramesh130/perfettoagent/issues/24) git tools, [#25](https://github.com/ramesh130/perfettoagent/issues/25) `symbolize`)
+### 6. [x] Git and repo tools ([#24](https://github.com/ramesh130/perfettoagent/issues/24) git tools, [#25](https://github.com/ramesh130/perfettoagent/issues/25) `symbolize`, [#31](https://github.com/ramesh130/perfettoagent/issues/31) `read_run_metadata`)
 `get_git_log`, `get_git_diff`, `git_blame`, `grep_repo`, `symbolize` and
-`read_run_metadata`, with the limits in `tech-stack.md`.
+`read_run_metadata` (ADR-0025), with the limits in `tech-stack.md`.
 - **Done when:** each tool has schema and limit tests against a fixture repo.
 
 ### 7. [~] `diagnose`: agent loop and output ([#29](https://github.com/ramesh130/perfettoagent/issues/29) tracer bullet, [#43](https://github.com/ramesh130/perfettoagent/issues/43) OpenAI)
@@ -99,14 +99,14 @@ Build the Tool Runner loop, the frozen system prompt and structured output. #29 
 Anthropic loop, `diagnosis.json` and an offline end-to-end test (ADR-0022). #43 added the
 OpenAI loop and made `gpt-5.6-luna` the default; `--provider` and `--model` choose the
 model (ADR-0020). The done criterion below is met by a live `gpt-5.6-luna` run (ADR-0023).
-#30 added `diagnosis.md`, rendered from the verified `diagnosis.json` (ADR-0024). Still
-open: the `--run-json` rules (#31) and an `--effort` flag (#49). A live `claude-opus-5-5`
-run waits for an Anthropic key.
+#30 added `diagnosis.md`, rendered from the verified `diagnosis.json` (ADR-0024), and #31
+the `--run-json` rules and `read_run_metadata` (ADR-0025). Still open: an `--effort` flag
+(#49). A live `claude-opus-5-5` run waits for an Anthropic key.
 
 The prompt states the workflow: establish the metric delta, then localise it in the trace
 (thread, slice, span), then correlate it with the range, then blame.
 
-Input rules:
+Input rules (ADR-0025; `--run-json` takes run metadata schema 1, not a capture's `run.json`):
 - If the `--run-json` commit is outside `--range`, refuse.
 - A dirty tree or a `debuggable: true` build becomes a caveat in the header. Never accept one
   silently.

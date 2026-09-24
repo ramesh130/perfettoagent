@@ -2,7 +2,9 @@
 (ADR-0015).
 
 A case is an opaque id. Its model-visible inputs are in `evals/cases/<id>/`: a baseline
-and a current trace, and `inputs.json`, whose range names two commits in a fixture repo.
+and a current trace, `inputs.json`, whose range names two commits in a fixture repo,
+and `run.json`, the current trace's run metadata (`perfettoagent.run_metadata`),
+sanitised so it names no plant (ADR-0025).
 Its expected answers are in `evals/answers/<id>.json`, a directory the runner reads only
 to score. `load_inputs` and `load_expected` read one side each, so code that builds the
 model's prompt from `load_inputs` has nothing to leak.
@@ -35,7 +37,12 @@ SCHEMA_VERSION = 1
 
 # What a case directory holds: its inputs, nothing else (a test checks it).
 CASE_FILES = frozenset(
-    {"inputs.json", "baseline.perfetto-trace.gz", "current.perfetto-trace.gz"}
+    {
+        "inputs.json",
+        "run.json",
+        "baseline.perfetto-trace.gz",
+        "current.perfetto-trace.gz",
+    }
 )
 
 # The verdicts an answer can expect (the diagnosis schema's, ADR-0006). A case never
@@ -56,6 +63,8 @@ class CaseInputs:
     current: Path
     range_base: str
     range_head: str
+    # The current trace's run metadata, for `diagnose --run-json` (ADR-0025).
+    run_metadata: Path
     # The fixture repo the range is in, holding every case's branch. The runner stages
     # from it; the model is given the staged clone, never this path, and never
     # `baseline` or `current` as they are here: their paths run through evals/.
@@ -64,13 +73,14 @@ class CaseInputs:
     def stage(self, dest: Path) -> "StagedCase":
         """Everything the model is given, under `dest`, which must not exist yet:
         `dest/repo` and the two traces as `dest/baseline.perfetto-trace.gz` and
-        `dest/current.perfetto-trace.gz`. The traces are hard links where the
-        filesystem allows, copies where it does not."""
+        `dest/current.perfetto-trace.gz`, and the run metadata as `dest/run.json`.
+        Files are hard links where the filesystem allows, copies where it does not."""
         dest.mkdir(parents=True)
         return StagedCase(
             repo=self.checkout(dest / "repo"),
             baseline=_link(self.baseline, dest / self.baseline.name),
             current=_link(self.current, dest / self.current.name),
+            run_metadata=_link(self.run_metadata, dest / self.run_metadata.name),
             range_base=self.range_base,
             range_head=self.range_head,
         )
@@ -96,6 +106,7 @@ class StagedCase:
     repo: Path
     baseline: Path
     current: Path
+    run_metadata: Path
     range_base: str
     range_head: str
 
@@ -132,6 +143,7 @@ def load_inputs(case_id: str, root: Path = EVALS_DIR) -> CaseInputs:
             current=directory / "current.perfetto-trace.gz",
             range_base=repo_range["base"],
             range_head=repo_range["head"],
+            run_metadata=directory / "run.json",
             bundle=root / "repos" / f"{inputs['repo']}.bundle",
         )
     except (KeyError, TypeError) as e:

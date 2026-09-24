@@ -16,6 +16,7 @@ it. Schema 1 keeps no rows (ADR-0006), and a row count is what the verifier chec
 evidence is the full sha the verifier resolved, and the path it checked.
 """
 
+from perfettoagent import run_metadata
 from perfettoagent.diagnosis import check_diagnosis
 
 # Headline words for each verdict: what a reader skimming the first line needs.
@@ -23,6 +24,12 @@ _VERDICT_WORDS = {
     "regression": "Regression",
     "no_regression": "No regression",
     "inconclusive": "Inconclusive",
+}
+
+# The run-metadata caveats the header names, in the words it uses (ADR-0025).
+_BUILD_CAVEATS = {
+    run_metadata.CAVEAT_DIRTY: "uncommitted changes",
+    run_metadata.CAVEAT_DEBUGGABLE: "debuggable",
 }
 
 # How many characters of a sha the prose shows; the evidence blocks show it in full.
@@ -45,7 +52,8 @@ def render(diagnosis: dict) -> str:
 
 
 def _headline(d: dict) -> str:
-    """The first ten lines: title, verdict line, culprit, verifier, confidence."""
+    """The first ten lines: title, metric, culprit, verifier, the current build's
+    caveats, a changed verdict, confidence."""
     v = d["verification"]
     lines = [
         f"# {_VERDICT_WORDS[d['verdict']]}",
@@ -56,6 +64,9 @@ def _headline(d: dict) -> str:
         f"{len(d['dropped_claims'])} dropped; {v['citations_passed']} of "
         f"{_count(v['citations_checked'], 'citation')} passed",
     ]
+    build = [word for caveat, word in _BUILD_CAVEATS.items() if caveat in d["caveats"]]
+    if build:
+        lines.append(f"- **Current build:** {', '.join(build)}; see Caveats")
     if v["verdict_before"] != d["verdict"]:
         lines.append(
             f"- **Verdict changed** by the verifier from "

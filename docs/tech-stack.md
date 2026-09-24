@@ -91,7 +91,7 @@ ceiling, and each capped result says whether it was cut and gives the true total
 | `git_blame(path, line_start, line_end, at)` | At most **200 lines** (ADR-0018). |
 | `grep_repo(pattern, paths, max_hits=100, at)` | Implemented with `git grep`, on commit `at`, never the working tree (ADR-0018). |
 | `symbolize(frame, which)` | Java/Kotlin only, using `stack_profile_*` tables and `--mapping`. Returns `null` for native frames. `frame` is a `stack_profile_frame` id in the `which` trace, and each side has its own R8 mapping, read as text (ADR-0019). |
-| `read_run_metadata()` | Available only when `--run-json` was passed. |
+| `read_run_metadata()` | Available only when `--run-json` was passed. The file is run metadata schema 1, not a capture tool's `run.json`, and its commit must be inside `--range` (ADR-0025). |
 
 ## Evaluation
 

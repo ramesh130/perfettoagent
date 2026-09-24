@@ -116,6 +116,16 @@ def check_range(repo: str | Path, git_range: str) -> str:
     return f"{rng.base}..{rng.head}"
 
 
+def commit_in_range(repo: str | Path, git_range: str, sha: str) -> bool:
+    """Whether `sha` names one commit inside `git_range` in `repo`, by the rule a
+    commit citation is held to (ADR-0006). Raises RangeError for a bad range."""
+    rng = _Range.parse(Path(repo), git_range)
+    if not SHA.fullmatch(sha):
+        return False
+    full = rng.resolve(sha)
+    return full is not None and rng.contains(full)
+
+
 def verify(
     output: dict,
     *,

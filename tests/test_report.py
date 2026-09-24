@@ -10,6 +10,7 @@ import pytest
 
 from perfettoagent.diagnosis import DiagnosisInvalid
 from perfettoagent.report import render
+from perfettoagent.run_metadata import CAVEAT_DEBUGGABLE, CAVEAT_DIRTY
 
 REPORTS = Path(__file__).parent / "fixtures" / "reports"
 VERDICTS = ("regression", "no_regression", "inconclusive")
@@ -98,3 +99,15 @@ def test_an_unverified_output_is_refused():
     del bad["verification"]
     with pytest.raises(DiagnosisInvalid):
         render(bad)
+
+
+def test_the_current_builds_caveats_are_named_in_the_first_ten_lines():
+    d = diagnosis("regression")
+    d["caveats"] = [CAVEAT_DIRTY, CAVEAT_DEBUGGABLE, *d["caveats"]]
+    head = render(d).splitlines()[:10]
+    line = "- **Current build:** uncommitted changes, debuggable; see Caveats"
+    assert line in head
+
+
+def test_no_build_line_without_run_metadata_caveats():
+    assert "Current build" not in render(diagnosis("regression"))
