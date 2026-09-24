@@ -25,6 +25,10 @@ DEFAULT_MODELS = {"openai": "gpt-5.6-luna", "anthropic": "claude-opus-5-5"}
 # docs/tech-stack.md: `high` unless a sweep asks for another level.
 DEFAULT_EFFORT = "high"
 
+# The levels the eval sweeps (roadmap item 9). A model may list others; `--effort`
+# takes any level, and check_model refuses one the model does not list.
+SWEPT_EFFORTS = ("low", "medium", "high", "xhigh")
+
 # The usage fields `run.usage` records (ADR-0006), each summed over the run's requests.
 USAGE_FIELDS = (
     "input_tokens",

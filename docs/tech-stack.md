@@ -34,9 +34,9 @@ Two providers, chosen per run with `--provider {anthropic,openai}` and `--model 
   in as strict function tools, unchanged (ADR-0020). Requests set `store: false` and replay
   the whole history, reasoning items included (ADR-0023).
 - The effort level sweeps `low`, `medium`, `high` and `xhigh` for the cost table, and
-  defaults to `high`. `diagnose()` takes it as a parameter; the `--effort` flag comes with
-  the sweep (#44, ADR-0023). It is always sent: `output_config.effort` for Anthropic, `reasoning.effort` for
-  OpenAI. A level a model does not support is refused, never rounded.
+  defaults to `high`. `diagnose --effort` chooses it (#49, ADR-0023). It is always sent:
+  `output_config.effort` for Anthropic, `reasoning.effort` for OpenAI. A level a model does
+  not support is refused, never rounded.
 - Every request is streamed, with an output cap of 64000 tokens (`max_tokens`,
   `max_output_tokens`). Check for truncation and refusal before reading content. Record a
   refusal or a truncated output as an `inconclusive` verdict with its reason (and its
