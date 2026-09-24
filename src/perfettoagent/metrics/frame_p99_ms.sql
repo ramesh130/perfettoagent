@@ -1,14 +1,16 @@
--- @description: 99th percentile (nearest rank) of how long the app's UI frames took, in ms, from the frame's start to its present on screen, per SurfaceFlinger's frame timeline. The frames are every frame of the app's own window (not its SurfaceView video layers) that has a timeline row and was presented before the trace ended; the app is the process with the most such frames. The time includes the app's UI thread and RenderThread and any wait in SurfaceFlinger's queue, so it cannot say which of them was slow. With a few hundred frames it is set by the slowest handful, so it moves between captures of the same build more than frame_p95_ms does. NULL if the trace has no such frame, which is the case when it was captured without the frametimeline data source.
+-- @description: 99th percentile (nearest rank) of how long the app's UI frames took, in ms, from the frame's start to its present on screen, per SurfaceFlinger's frame timeline. The frames are every frame of the app's own window (not its SurfaceView video layers) that has a timeline row and was presented before the trace ended; the app is the process with the most such frames. The time includes the app's UI thread and RenderThread and any wait in SurfaceFlinger's queue, so it cannot say which of them was slow. With a few hundred frames it is set by the slowest handful, so it moves between captures of the same build more than frame_p95_ms does; frame_ui_time_p95_ms is the app's main thread alone. NULL if the trace has no such frame, which is the case when it was captured without the frametimeline data source.
 -- @unit: ms
 -- @requires_baseline: true
 --
 -- Everything above the first line that is not a comment is metadata (the @fields) or
 -- notes for whoever edits this file. What follows it is sql_used, verbatim. This file
--- and frame_p95_ms.sql are the same query at a different rank: change both, and see
+-- and frame_p95_ms.sql are the same query at a different rank. It shares its query
+-- with all four frame metrics (jank_frames_pct, frame_p95_ms, frame_p99_ms,
+-- frame_ui_time_p95_ms) down to the `frames` CTE: change them together, and see
 -- jank_frames_pct.sql for which frames are counted and why.
 --
 -- Nearest rank, the value at rank ceil(0.99 n), so the number is one real frame's
--- duration. On a 400-800 frame capture that is the 5th to 8th slowest frame.
+-- duration. On the fixtures' 427-1640 frames that is the 5th to 17th slowest frame.
 -- ref: https://en.wikipedia.org/wiki/Percentile#The_nearest-rank_method
 --
 -- Checked against every frame's duration, with the percentile taken in Python, on the

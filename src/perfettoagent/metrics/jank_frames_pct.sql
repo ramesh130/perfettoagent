@@ -31,6 +31,7 @@
 -- verdict, and one still unpresented when the trace stopped (dur not positive). The
 -- layers table can repeat a frame (one row per DrawFrame, and its fallback join is on
 -- the vsync id alone), hence DISTINCT on the timeline row.
+-- ref: https://github.com/google/perfetto/blob/v58.2/src/trace_processor/perfetto_sql/stdlib/android/frames/timeline.sql
 --
 -- The app is the process with the most window frames, ties broken by upid: a capture
 -- drives one app, and the launcher or SystemUI drawing a frame or two during it
