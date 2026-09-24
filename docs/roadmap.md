@@ -149,10 +149,12 @@ Report:
 Never score on the model's own confidence field.
 - **Done when:** a summary table is committed to `evals/results/summary.md`.
 
-### 10. [ ] `review`: human-in-the-loop feedback
+### 10. [x] `review`: human-in-the-loop feedback ([#32](https://github.com/ramesh130/perfettoagent/issues/32))
 `perfettoagent review <out-dir>` accepts `accept`, `reject <reason>` or
 `partial <claim-ids>`, and appends the answer to `evals/feedback.jsonl` along with hashes of
-the inputs. A rejected diagnosis is a candidate eval case.
+the inputs. A rejected diagnosis is a candidate eval case. The trace hashes and range come
+from `diagnosis.json`'s `run.inputs`, recorded by `diagnose`; `partial` names the kept
+claims that are right (ADR-0026).
 
 ### 11. [ ] Write-up
 The README opens with the one-liner, a real diagnosis and the eval table. Add

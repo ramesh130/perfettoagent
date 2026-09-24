@@ -17,6 +17,7 @@ from perfettoagent.loop import RunFailed
 from perfettoagent.metrics import UnknownMetric
 from perfettoagent.query import MAX_ROWS, QueryRejected, query_trace
 from perfettoagent.report import render
+from perfettoagent.review import FEEDBACK, ReviewRefused, review
 from perfettoagent.trace_processor import TraceProcessorError
 from perfettoagent.verify import RangeError
 
@@ -85,6 +86,31 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    rv = commands.add_parser(
+        "review",
+        help="record a person's answer to a diagnosis in evals/feedback.jsonl",
+        description=(
+            "Accept, reject or partly accept the diagnosis.json in OUT_DIR, and append "
+            "the answer, with the sha256 of both traces, the range and the diagnosis, "
+            "to the feedback file. Nothing else is written."
+        ),
+    )
+    rv.add_argument("out_dir", type=Path, help="the directory holding diagnosis.json")
+    rv.add_argument(
+        "--feedback",
+        type=Path,
+        default=FEEDBACK,
+        help="the file to append to (default: this repo's evals/feedback.jsonl)",
+    )
+    answers = rv.add_subparsers(dest="answer", required=True)
+    answers.add_parser("accept", help="every kept claim is right")
+    reject = answers.add_parser("reject", help="the diagnosis is wrong")
+    reject.add_argument("reason", nargs="+", help="why, in words")
+    partial = answers.add_parser("partial", help="some kept claims are right")
+    partial.add_argument(
+        "claim_ids", nargs="+", metavar="CLAIM_ID", help="the claims that are right"
+    )
+
     tp = commands.add_parser(
         "tp",
         help="run one SELECT on a trace through the pinned trace processor",
@@ -112,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
     if args.command == "diagnose":
         return _diagnose(args)
+    if args.command == "review":
+        return _review(args)
     return _tp(args)
 
 
@@ -180,6 +208,25 @@ def _summary(diagnosis: dict, out: Path) -> str:
         f"{len(diagnosis['dropped_claims'])} dropped; {run['tool_calls']} tool calls, "
         f"${run['usd']:.4f}, {run['wall_time_s']:.0f} s -> {out}"
     )
+
+
+def _review(args: argparse.Namespace) -> int:
+    try:
+        line = review(
+            args.out_dir,
+            args.answer,
+            reason=" ".join(args.reason) if args.answer == "reject" else None,
+            claim_ids=args.claim_ids if args.answer == "partial" else (),
+            feedback=args.feedback,
+        )
+    except ReviewRefused as e:
+        print(f"perfettoagent review: rejected: {e}", file=sys.stderr)
+        return EXIT_REJECTED
+    print(
+        f"{line['answer']}: {len(line['claims_accepted'])} claims accepted, "
+        f"{len(line['claims_rejected'])} rejected -> {args.feedback}"
+    )
+    return EXIT_OK
 
 
 def _tp(args: argparse.Namespace) -> int:

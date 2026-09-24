@@ -43,6 +43,7 @@ from perfettoagent.run_metadata import (
     RunMetadataInvalid,
 )
 from perfettoagent.run_metadata import load as load_run_metadata
+from perfettoagent.trace_processor import sha256_of
 from perfettoagent.trace_tools import TRACE_TOOLS
 from perfettoagent.verify import RangeError
 
@@ -141,7 +142,7 @@ def run(repo, tiny_trace, provider):
 # --- The loop: a normal answer, a refusal, a cut-off answer ---------------------------
 
 
-def test_a_normal_end_turn_yields_a_verified_diagnosis(run, repo, provider):
+def test_a_normal_end_turn_yields_a_verified_diagnosis(run, repo, provider, tiny_trace):
     """The control: one tool call, then an answer, which the verifier keeps."""
 
     def script(request, turn):
@@ -171,6 +172,12 @@ def test_a_normal_end_turn_yields_a_verified_diagnosis(run, repo, provider):
         DEFAULT_EFFORT,
     )
     assert run_block["tool_calls"] == 1
+    # What was diagnosed, by content and never by path (ADR-0026).
+    assert run_block["inputs"] == {
+        "baseline_sha256": sha256_of(tiny_trace),
+        "current_sha256": sha256_of(tiny_trace),
+        "range": repo["range"],
+    }
     # The same usage in both providers' own terms, recorded in one shape.
     assert run_block["usage"] == {k: 2 * v for k, v in USAGE.items()}
     assert run_block["usd"] == round(2 * usd(model, USAGE), 6) > 0
