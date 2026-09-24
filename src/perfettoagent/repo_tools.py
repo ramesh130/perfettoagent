@@ -20,10 +20,11 @@ description, and in the result as `truncated` with the true total.
 ref: https://git-scm.com/docs/gitcli (--end-of-options)
 """
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from perfettoagent.git import diff_base, resolve_commit, run_git
+from perfettoagent.git import commit_message, diff_base, resolve_commit, run_git
 from perfettoagent.tools import (
     INTEGER,
     STRING,
@@ -54,6 +55,13 @@ MAX_BLAME_LINES = 200
 # be megabytes, and the hit's path and line number are what the model cites.
 MAX_HIT_CHARS = 300
 
+# A backslash before a letter or digit. POSIX extended regexes define `\` only before
+# a special character; `\b`, `\w` and the like are extensions that glibc's regex has and
+# macOS's does not, where `\bfoo` silently matches nothing. Refused, so a pattern means
+# the same on every host and a zero is never an artefact of the platform.
+# ref: https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap09.html#tag_09_04_02
+_CLASS_ESCAPE = re.compile(r"\\[0-9A-Za-z]")
+
 # Separators for `git log --format`: ASCII record and unit separators, which no commit
 # subject or author name contains. ref: https://git-scm.com/docs/pretty-formats
 _RECORD = "\x1e"
@@ -64,34 +72,38 @@ _NO_CONFIG_DIFF = ["--no-color", "--no-ext-diff", "--no-textconv"]
 
 
 def get_git_log(repo: Path, range: str, paths: list[str] | None) -> dict:
-    """The commits in `range` ("base..head"), newest first, at most MAX_COMMITS."""
+    """The commits in `range` ("base..head"), newest first, at most MAX_COMMITS.
+    (`range` shadows the builtin because it is the schema's name for it.)"""
     base, head = _resolve_range(repo, range)
-    spec = f"{base}..{head}"
+    # `log.showSignature` in the repo's config would run its `gpg.program`.
+    selection = [
+        "--no-show-signature",
+        "--end-of-options",
+        f"{base}..{head}",
+        "--",
+        *_paths(paths),
+    ]
     out = run_git(
         repo,
         [
             "log",
             "-z",
             "--name-only",
+            # With `paths`, list each commit's every file, not only the matching ones.
+            "--full-diff",
             "--no-renames",
-            "--no-show-signature",
             *_NO_CONFIG_DIFF,
             f"--max-count={MAX_COMMITS + 1}",
             f"--format={_RECORD}%H{_UNIT}%an{_UNIT}%aI{_UNIT}%s",
-            "--end-of-options",
-            spec,
-            "--",
-            *_paths(paths),
+            *selection,
         ],
     )
     commits = [_log_record(r) for r in out.split(_RECORD)[1:]]
     truncated = len(commits) > MAX_COMMITS
     if truncated:
         # Only now is the true count worth a second pass: a sha per line, no files.
-        count = run_git(
-            repo, ["log", "--format=%H", "--end-of-options", spec, "--", *_paths(paths)]
-        )
-        commit_count = len(count.splitlines())
+        count = run_git(repo, ["log", "--format=%H", *selection])
+        commit_count = len(_lines(count))
     else:
         commit_count = len(commits)
     return {
@@ -124,7 +136,7 @@ def get_git_diff(repo: Path, sha: str, path: str | None, max_lines: int | None) 
     return {
         "sha": commit,
         "diffed_against": before,
-        "message": _message(repo, commit),
+        "message": commit_message(repo, commit),
         "path": path,
         "diff": "\n".join(lines[:limit]),
         "line_count": len(lines),
@@ -163,6 +175,8 @@ def git_blame(repo: Path, path: str, line_start: int, line_end: int, at: str) ->
         "at": commit,
         "path": path,
         "lines": _blame_lines(out, line_start),
+        # The span asked for; `lines` holds all of it unless `truncated`.
+        "line_count": line_end - line_start + 1,
         "truncated": truncated,
     }
 
@@ -174,6 +188,12 @@ def grep_repo(
     `at`, at most `max_hits` of them."""
     if not pattern:
         raise ToolInputError("pattern: must not be empty")
+    if _CLASS_ESCAPE.search(pattern):
+        raise ToolInputError(
+            f"pattern: {pattern!r} uses a backslash-letter escape (\\b, \\d, \\w, "
+            "\\s...), which POSIX extended regexes do not define; use [[:digit:]], "
+            "[[:alnum:]_], [[:space:]], or spell the boundary out"
+        )
     limit = _limit(max_hits, MAX_GREP_HITS, "max_hits")
     commit = _resolve(repo, at, "at")
     out = run_git(
@@ -240,19 +260,11 @@ def _lines(out: str) -> list[str]:
     return out.removesuffix("\n").split("\n") if out else []
 
 
-def _message(repo: Path, commit: str) -> str:
-    """A commit's full message, from its raw object (headers, a blank line, message).
-    ref: https://git-scm.com/book/en/v2/Git-Internals-Git-Objects#_git_commit_objects
-    """
-    raw = run_git(repo, ["cat-file", "commit", commit])
-    return raw.split("\n\n", 1)[1].strip() if "\n\n" in raw else ""
-
-
 def _log_record(record: str) -> dict:
-    """One commit of `git log -z --name-only`: the format line, then its files, each
-    ended by NUL. `-z` ends the format line with NUL where it has files and a newline
-    before them where it has; a subject holds neither, so the first of the two ends
-    the header."""
+    """One commit of `git log -z --name-only`: the format line, then its files as
+    NUL-separated names. Under `-z` git ends the format line with NUL, and may put a
+    newline before the first file; a subject holds neither, so the header ends at the
+    first of the two."""
     end = min(i for i in (record.find("\0"), record.find("\n"), len(record)) if i >= 0)
     header, files = record[:end], record[end + 1 :]
     sha, author, date, subject = header.split(_UNIT)
@@ -315,7 +327,8 @@ GET_GIT_LOG = Tool(
         "sha, author, author date, subject line and the files it changed. `range` is "
         "`base..head`: the commits reachable from head and not from base. `paths` "
         "keeps only commits that changed a file at or under one of these paths "
-        "(literal paths from the repo root, not globs). At most "
+        "(literal paths from the repo root, not globs); each kept commit still lists "
+        "all its files. At most "
         f"{MAX_COMMITS} commits come back; `commit_count` is always the true total and "
         "`truncated` says when the list stopped short, in which case narrow by path. "
         "It cannot tell you what a commit changed inside a file (use get_git_diff), "
@@ -362,7 +375,8 @@ GIT_BLAME = Tool(
         "For each line of a file from `line_start` to `line_end` (1-based, inclusive) "
         "as it was at commit `at`, the commit that last changed it: sha, author, "
         f"author date (UTC), subject and the line's text. At most {MAX_BLAME_LINES} "
-        "lines per call; `truncated` says when the span was cut. It cannot see "
+        "lines per call; `line_count` is the span asked for and `truncated` says when "
+        "it was cut. It cannot see "
         "lines that were deleted, it does not follow code moved from another file, "
         "and a line can name a commit outside the range under study: check with "
         "get_git_log."
@@ -381,13 +395,14 @@ GREP_REPO = Tool(
     description=(
         "Search the files of the target repo as they were at commit `at` (not any "
         "working tree) for lines matching `pattern`, a case-sensitive POSIX extended "
-        "regular expression. `paths` limits the search to files at or under these "
-        "repo-relative paths. Each hit gives its path, line number and text (cut to "
-        f"{MAX_HIT_CHARS} characters). At most `max_hits` hits come back (null or "
-        f"anything above {MAX_GREP_HITS} means {MAX_GREP_HITS}); `hit_count` is the "
-        "true total and `truncated` says when the list was cut. Binary files are "
-        "skipped. It cannot tell you which of the matches run, nor when a line was "
-        "added (use git_blame)."
+        "regular expression: no `\\b`, `\\d`, `\\w` or `\\s` (use [[:digit:]], "
+        "[[:alnum:]_], [[:space:]]). `paths` limits the search to files at or under "
+        "these repo-relative paths. Each hit gives its path, line number and text "
+        f"(cut to {MAX_HIT_CHARS} characters). At most `max_hits` hits come back "
+        f"(null or anything above {MAX_GREP_HITS} means {MAX_GREP_HITS}); "
+        "`hit_count` is the true total and `truncated` says when the list was cut. "
+        "Binary files are skipped. It cannot tell you which of the matches run, nor "
+        "when a line was added (use git_blame)."
     ),
     input_schema=strict_input(
         pattern=described(STRING, "A POSIX extended regular expression."),

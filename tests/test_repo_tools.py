@@ -194,6 +194,9 @@ def test_log_filters_by_path(case_repo):
     path = everything[0]["files"][0]
     result = get_git_log(repo, f"{base}..{head}", [path])
     assert 0 < len(result["commits"]) <= len(everything)
+    # A kept commit lists all its files, not only those under `paths`.
+    files = {c["sha"]: c["files"] for c in everything}
+    assert all(c["files"] == files[c["sha"]] for c in result["commits"])
     assert all(path in c["files"] for c in result["commits"])
 
 
@@ -302,8 +305,10 @@ def test_blame_is_cut_at_the_cap_and_says_so(synth):
     assert len(result["lines"]) == MAX_BLAME_LINES
     assert result["lines"][-1]["text"] == f"line {MAX_BLAME_LINES - 1}"
     assert result["truncated"] is True
+    assert result["line_count"] == SYNTH_DIFF_LINES
     control = git_blame(repo, "big.txt", 1, MAX_BLAME_LINES, shas[-1])
     assert control["truncated"] is False
+    assert control["line_count"] == MAX_BLAME_LINES
     assert control["lines"] == result["lines"]
 
 
@@ -347,6 +352,21 @@ def test_grep_is_cut_at_the_cap_and_says_so(synth):
     assert grep_repo(repo, "needle", None, 10_000, shas[-1])["hits"] == result["hits"]
     control = grep_repo(repo, "needle", None, 7, shas[-1])
     assert len(control["hits"]) == 7
+
+
+@pytest.mark.parametrize("pattern", [r"\bneedle", r"needle\d", r"val\sneedle"])
+def test_grep_refuses_escapes_posix_does_not_define(synth, pattern):
+    """`\\b` and the like are glibc extensions; on macOS they silently match nothing."""
+    repo, shas = synth
+    with pytest.raises(ToolInputError, match=r"\[\[:digit:\]\]"):
+        grep_repo(repo, pattern, None, None, shas[-1])
+
+
+def test_grep_takes_posix_classes_and_escaped_specials(synth):
+    repo, shas = synth
+    classes = grep_repo(repo, "needle[[:digit:]]+ = ", None, None, shas[-1])
+    assert classes["hit_count"] == SYNTH_HITS
+    assert grep_repo(repo, r"needle1\.", None, None, shas[-1])["hit_count"] == 0
 
 
 def test_grep_with_no_match_is_an_empty_answer(synth):
@@ -394,6 +414,10 @@ def test_no_argument_is_read_as_an_option(synth, tmp_path, injection):
         get_git_log(repo, f"{text}..{head}", None)
     with pytest.raises(ToolInputError):
         grep_repo(repo, "needle", None, None, text)
+    with pytest.raises(ToolInputError):
+        git_blame(repo, "counter.txt", 1, 1, text)
+    with pytest.raises(ToolInputError):
+        get_git_log(repo, f"{shas[0]}..{text}", None)
     assert not out.exists()
 
 
