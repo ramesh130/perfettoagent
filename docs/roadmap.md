@@ -29,7 +29,8 @@ Canned SQL, each tested against a fixture trace with a known answer.
 | Metric | Source | Needs baseline |
 |---|---|---|
 | `startup_ttid_ms`, `startup_ttfd_ms` | `android_startups`, `android_startup_time_to_display` | yes |
-| `jank_frames_pct`, `frame_p95_ms`, `frame_p99_ms` | `actual_/expected_frame_timeline_slice` | yes |
+| `jank_frames_pct`, `frame_p95_ms`, `frame_p99_ms` | stdlib `android_frames_layers` (the app's window layer), `actual_frame_timeline_slice` | yes |
+| `frame_ui_time_p95_ms` (ADR-0011) | stdlib `android_frames_choreographer_do_frame` (UI time, as `android_frames_ui_time`) | yes |
 | `main_thread_blocked_ms` | `thread_state`, `slice` | no |
 | `binder_wait_ms` | `slice` (binder) | no |
 | `heap_growth_objects_by_class` | stdlib `heap_graph_class_aggregation` (reachable objects in `heap_graph_object`, by `heap_graph_class`) | yes |
@@ -37,6 +38,8 @@ Canned SQL, each tested against a fixture trace with a known answer.
 | `gc_time_ms` | `slice` (`GC`) | no |
 
 - The startup metrics are the median cold start of the app (ADR-0009).
+- The frame metrics count the app's window layer, and jank is `App Deadline Missed`
+  (ADR-0011).
 - **Done when:** every metric has a passing fixture test, and `compute_metric` returns
   `sql_used`.
 
@@ -61,9 +64,9 @@ demo:
 | Regression | Plant | Expected metric |
 |---|---|---|
 | Main-thread I/O on startup | Synchronous file read in `Application.onCreate` (the patch adds the subclass; ADR-0007) | `startup_ttid_ms` |
-| Allocation storm | 1M boxed floats in each scrolled frame's draw in the feed (ADR-0008) | `jank_frames_pct`, `gc_time_ms` |
+| Allocation storm | 1M boxed floats in each scrolled frame's draw in the feed (ADR-0008) | `frame_ui_time_p95_ms`, `gc_time_ms` (ADR-0011) |
 | Synchronous sleep | `Thread.sleep(120)` in a click handler | `main_thread_blocked_ms` |
-| Layout thrash | Forced re-measure of each visible item every frame in a Compose `LazyColumn`, with a width-fitted title (ADR-0007, ADR-0008) | `frame_p95_ms` |
+| Layout thrash | Forced re-measure of each visible item every frame in a Compose `LazyColumn`, with a width-fitted title (ADR-0007, ADR-0008) | `frame_ui_time_p95_ms`, `jank_frames_pct` (ADR-0011) |
 | Listener leak | devicelab's existing `resetForReuse` plant | `heap_growth_objects_by_class` |
 
 Also capture **clean pairs** (baseline against a second clean capture), at least as many as
