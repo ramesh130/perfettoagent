@@ -10,6 +10,7 @@ from test_diagnose import answer, build_repo
 from perfettoagent import agent
 from perfettoagent.cli import main
 from perfettoagent.diagnosis import check_diagnosis
+from perfettoagent.report import render
 
 
 def test_main_without_command_prints_help(capsys):
@@ -137,6 +138,29 @@ def test_diagnose_writes_a_verified_diagnosis(
     assert "1 claims kept, 0 dropped; 0 tool calls" in printed
 
 
+def test_diagnose_writes_the_report_beside_the_diagnosis(
+    cli_model, repo, tiny_trace, tmp_path
+):
+    cli_model(lambda request, turn: reply(text(answer(repo))))
+    out = tmp_path / "run" / "diagnosis.json"
+    out.parent.mkdir()
+    assert diagnose_cli(repo, tiny_trace, out) == 0
+    report = (tmp_path / "run" / "diagnosis.md").read_text()
+    assert report == render(json.loads(out.read_text()))
+    assert report.startswith("# Regression\n")
+
+
+def test_diagnose_refuses_an_out_path_the_report_would_overwrite(
+    cli_model, repo, tiny_trace, tmp_path, capsys
+):
+    fake = cli_model(lambda request, turn: reply(text(answer(repo))))
+    out = tmp_path / "diagnosis.md"
+    assert diagnose_cli(repo, tiny_trace, out) == 2
+    assert fake.requests == []
+    assert not out.exists()
+    assert "ends in .md" in capsys.readouterr().err
+
+
 def test_diagnose_writes_a_refusal_as_inconclusive(
     cli_model, repo, tiny_trace, tmp_path
 ):
@@ -153,6 +177,7 @@ def test_diagnose_writes_nothing_for_an_invalid_answer(
     out = tmp_path / "diagnosis.json"
     assert diagnose_cli(repo, tiny_trace, out) == 1
     assert not out.exists()
+    assert not out.with_suffix(".md").exists()
     assert "does not match its schema" in capsys.readouterr().err
 
 

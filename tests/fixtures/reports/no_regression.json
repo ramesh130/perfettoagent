@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "confidence": "medium",
+  "culprit": null,
+  "metric": {
+    "name": "startup_ttid_ms",
+    "unit": "ms",
+    "baseline": 412.25,
+    "current": 413.5,
+    "delta": 1.25,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nSELECT ttid FROM android_startups"
+  },
+  "claims": [
+    {
+      "id": "c0",
+      "text": "Cold start moved 1.25 ms, inside one capture's noise.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT `ts`, dur FROM slice WHERE name = 'x ``` y'",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 3,
+    "citations_passed": 3,
+    "wall_time_s": 0.2
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "tool_calls": 12,
+    "usage": {
+      "input_tokens": 33,
+      "output_tokens": 8663,
+      "cache_read_input_tokens": 221104,
+      "cache_creation_input_tokens": 44528
+    },
+    "usd": 0.0051,
+    "wall_time_s": 41.0
+  }
+}
