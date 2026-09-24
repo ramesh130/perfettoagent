@@ -23,7 +23,7 @@ Download `trace_processor_shell` 58.2, verify its sha256, and cache it. Build th
 - **Done when:** `tp` returns rows from a devicelab trace, a tampered archive is refused, and
   a non-SELECT statement is rejected.
 
-### 3. [~] Metric library ([#3](https://github.com/ramesh130/perfettoagent/issues/3) tracer, [#7](https://github.com/ramesh130/perfettoagent/issues/7) startup, [#8](https://github.com/ramesh130/perfettoagent/issues/8) frames, [#9](https://github.com/ramesh130/perfettoagent/issues/9) thread/memory)
+### 3. [x] Metric library ([#3](https://github.com/ramesh130/perfettoagent/issues/3) tracer, [#7](https://github.com/ramesh130/perfettoagent/issues/7) startup, [#8](https://github.com/ramesh130/perfettoagent/issues/8) frames, [#9](https://github.com/ramesh130/perfettoagent/issues/9) thread/memory)
 Canned SQL, each tested against a fixture trace with a known answer.
 
 | Metric | Source | Needs baseline |
@@ -31,15 +31,20 @@ Canned SQL, each tested against a fixture trace with a known answer.
 | `startup_ttid_ms`, `startup_ttfd_ms` | `android_startups`, `android_startup_time_to_display` | yes |
 | `jank_frames_pct`, `frame_p95_ms`, `frame_p99_ms` | stdlib `android_frames_layers` (the app's window layer), `actual_frame_timeline_slice` | yes |
 | `frame_ui_time_p95_ms` (ADR-0011) | stdlib `android_frames_choreographer_do_frame` (UI time, as `android_frames_ui_time`) | yes |
-| `main_thread_blocked_ms` | `thread_state`, `slice` | no |
-| `binder_wait_ms` | `slice` (binder) | no |
+| `main_thread_blocked_ms` (ADR-0013) | `thread_state` inside the main thread's top-level `slice`s other than `Choreographer#doFrame` | no |
+| `binder_wait_ms` (ADR-0013) | stdlib `android_binder_txns` (the main thread's synchronous calls) | no |
 | `heap_growth_objects_by_class` | stdlib `heap_graph_class_aggregation` (reachable objects in `heap_graph_object`, by `heap_graph_class`) | yes |
-| `native_unfreed_bytes` | `heap_profile_allocation` | no |
-| `gc_time_ms` | `slice` (`GC`) | no |
+| `native_unfreed_bytes` (ADR-0014) | `heap_profile_allocation` | no |
+| `gc_time_ms` (ADR-0013) | stdlib `android_garbage_collection_events` (the app's collections) | no |
 
 - The startup metrics are the median cold start of the app (ADR-0009).
 - The frame metrics count the app's window layer, and jank is `App Deadline Missed`
   (ADR-0011).
+- The thread metrics use the frame metrics' app and its main thread. Main-thread
+  blocking counts only blocking outside `Choreographer#doFrame` (ADR-0013).
+- A metric with no data on a trace reads `null` with a `no_data` reason, never 0.
+  No fixture has a native heap profile, so `native_unfreed_bytes` is tested only on
+  that path until a heapprofd capture exists (ADR-0014).
 - **Done when:** every metric has a passing fixture test, and `compute_metric` returns
   `sql_used`.
 

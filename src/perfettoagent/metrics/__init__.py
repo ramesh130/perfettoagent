@@ -15,6 +15,7 @@ ADR-0005 records this result shape.
     @unit               the unit of every value, e.g. ms, objects, bytes (required)
     @requires_baseline  true if the number means nothing without a baseline (required)
     @key                present for a keyed metric: what its key column names
+    @no_data            why the SQL can return NULL: what the trace lacks (optional)
 
 Two shapes of SQL:
 
@@ -24,6 +25,12 @@ Two shapes of SQL:
   per class. Values must add up across keys, because an absent key counts as 0 and the
   headline is their sum. The result also has a `breakdown`: the keys that changed most,
   each with its own `sql_used` that returns exactly its one number.
+
+No data is not zero. A metric whose SQL returns NULL on a trace says that the trace
+lacks what it reads (a data source was off, or the app it looks for is absent), and
+`baseline`/`current` is None for that side. The result then also carries `no_data`,
+{side: reason}, with the file's `@no_data` text, so the model is told why in words
+and cannot mistake the missing number for a measured 0. ADR-0014 records this.
 
 Why each number carries its own SQL: the verifier (roadmap item 4) re-runs a citation's
 SQL through `query_trace`, which returns at most MAX_ROWS rows, and a heap dump has tens
@@ -63,11 +70,15 @@ _FIELD = re.compile(r"--\s*@(\w+):\s*(.*)")
 # The header fields, as the module docstring lists them. Any other @field is refused,
 # so a misspelt one (`@requires_basline`) fails loudly instead of defaulting.
 _REQUIRED = ("description", "unit", "requires_baseline")
-_OPTIONAL = ("key",)
+_OPTIONAL = ("key", "no_data")
 
 # Exactly these spellings: "yes", "1" or "no" in a hand-edited header are refused
 # rather than guessed at.
 _BOOLEANS = {"true": True, "false": False}
+
+# The reason a result gives for a NULL value when its file has no @no_data line: all
+# that is known then is that the SQL found nothing to measure.
+_NO_DATA = "the trace lacks the data this metric reads, so its SQL returned NULL"
 
 # The two sides of a comparison, in the order results report them.
 _SIDES = ("baseline", "current")
@@ -91,6 +102,8 @@ class Metric:
     unit: str
     requires_baseline: bool
     key: str | None
+    # Why the SQL can return NULL, for the result's `no_data`.
+    no_data: str
     # The file's SQL from its first non-comment line: `sql_used`, verbatim.
     sql: str
 
@@ -123,11 +136,13 @@ def compute_metric(
 
         {name, unit, baseline, current, delta, sql_used}
 
-    plus `breakdown` for a keyed metric. `baseline` and `delta` are None without a
-    baseline, which only a metric with `requires_baseline: false` accepts. `delta` is
-    current - baseline. `sql_used` is the SQL that returns `baseline` on the baseline
-    trace and `current` on the current one; `split_includes` turns it into the
-    arguments `query_trace` takes. JSON-serialisable.
+    plus `breakdown` for a keyed metric, and `no_data`, {side: reason}, for each trace
+    given on which the metric's value is NULL (see the module docstring). `baseline`
+    and `delta` are None without a baseline, which only a metric with
+    `requires_baseline: false` accepts. `delta` is current - baseline. `sql_used` is
+    the SQL that returns `baseline` on the baseline trace and `current` on the current
+    one; `split_includes` turns it into the arguments `query_trace` takes.
+    JSON-serialisable.
 
     Raises UnknownMetric for a name not in `list_metrics()`, and MetricError when a
     needed baseline is missing or the SQL returns rows of the wrong shape.
@@ -158,6 +173,13 @@ def compute_metric(
         "delta": _delta(values["baseline"], values["current"]),
         "sql_used": sql_used,
     }
+    no_data = {
+        side: metric.no_data
+        for side, trace in traces.items()
+        if trace is not None and values[side] is None
+    }
+    if no_data:
+        result["no_data"] = no_data
     if metric.key is not None:
         result["breakdown"] = _breakdown(metric, statement, modules, traces, binary)
     return result
@@ -324,5 +346,6 @@ def _parse(name: str, text: str) -> Metric:
         unit=fields["unit"],
         requires_baseline=requires_baseline,
         key=fields.get("key") or None,
+        no_data=fields.get("no_data") or _NO_DATA,
         sql=sql,
     )
