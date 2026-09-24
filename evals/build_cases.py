@@ -72,9 +72,14 @@ JANK_BASE = "57e3144bca8c591023be8c764bf961c1892cd84d"
 LEAK_BASE = "abc232cb33fb06bf5f9de62856012cd77c434c32"
 
 # Where the plant patches are read from: superPlayer's main when the captures were made.
-PLANTS_AT = "9fdd93c"
+PLANTS_AT = "9fdd93c22420f0fdd62211e2b70fa27a0308a8e6"
 
+# Where devicelab writes each run, one directory per run named `<UTC start>-<scenario>`.
 OUT = "devicelab/out"
+
+# The gap between two commits of a range, drawn per commit: 40 minutes to 10 hours, so
+# a range spans a working week or so and no commit's time stands out.
+COMMIT_GAP_MINUTES = (40, 600)
 
 # Fictional, so no real person is named as a culprit.
 AUTHORS = (
@@ -83,8 +88,13 @@ AUTHORS = (
     ("Lena Fischer", "lena.fischer@superplayer.invalid"),
 )
 
-# Neutral commits per range, besides the plant: the issue asks for at least 8.
-NEUTRAL_PER_CASE = 9
+# Commits in a range, the plant's included, drawn per case from this span for planted and
+# clean cases alike, so a range's length says nothing about its verdict. At least 9
+# neutral ones besides a plant: the issue asks for 8.
+RANGE_COMMITS = (10, 12)
+
+# Of a range's neutral commits, how many are decoys (Edit.decoy), drawn per case.
+DECOYS_PER_CASE = (2, 3)
 
 
 @dataclass(frozen=True)
@@ -100,6 +110,12 @@ class Edit:
     # (path, old identifier, new identifier): every whole-word occurrence, comments
     # included
     renames: tuple[tuple[str, str, str], ...] = ()
+    # A change in behaviour, in code no scenario runs. Without some of these in a range,
+    # the plant would be the one commit whose message describes a new behaviour.
+    decoy: bool = False
+
+    def apply(self, repo: "Repo", tree: str, superplayer: Path) -> str:
+        return repo.edit(tree, self)
 
 
 FEED = "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt"
@@ -107,6 +123,14 @@ MAIN = "demo/src/main/kotlin/com/superplayer/demo/MainActivity.kt"
 CORE = "superplayer-core/src/main/kotlin/com/superplayer/core"
 POOL = f"{CORE}/PlayerPool.kt"
 PLAYER = f"{CORE}/SuperPlayer.kt"
+DEMO = "demo/src/main/kotlin/com/superplayer/demo"
+TV = f"{DEMO}/TvScreen.kt"
+MOQ = f"{DEMO}/MoqScreen.kt"
+DOWNLOADS = f"{DEMO}/DownloadsScreen.kt"
+TESTKIT = "superplayer-testkit/src/main/kotlin/com/superplayer/testkit"
+HARNESS = f"{TESTKIT}/PlaybackHarness.kt"
+NETWORK = f"{TESTKIT}/NetworkProfile.kt"
+FAULTS = f"{TESTKIT}/FaultScript.kt"
 
 # Edits every snapshot can take: the library and the build are the same in all three
 # where these touch them.
@@ -160,6 +184,51 @@ SHARED_EDITS = (
 # hunk the feed plants change, and rename nothing a plant's lines use, so each plant
 # applies at any position among them.
 DEMO_EDITS = SHARED_EDITS + (
+    # Changes in behaviour, in screens neither the startup nor the jank scenario opens
+    # (they launch the player and the feed): what they change never runs in a trace.
+    Edit(
+        "Hide the TV controls four seconds after the last press",
+        decoy=True,
+        changes=(
+            (
+                TV,
+                " * Five seconds after the last press:",
+                " * Four seconds after the last press:",
+            ),
+            (
+                TV,
+                "private const val CONTROLS_HIDE_AFTER_MS = 5_000L",
+                "private const val CONTROLS_HIDE_AFTER_MS = 4_000L",
+            ),
+        ),
+    ),
+    Edit(
+        "Log the MoQ screen's position every second",
+        decoy=True,
+        changes=(
+            (
+                MOQ,
+                " * Two seconds: short enough that a thirty-second run leaves a dozen lines to read a trend off, and",
+                " * One second: short enough that a thirty-second run leaves thirty lines to read a trend off, and",
+            ),
+            (
+                MOQ,
+                "private const val POSITION_SAMPLE_MS = 2_000L",
+                "private const val POSITION_SAMPLE_MS = 1_000L",
+            ),
+        ),
+    ),
+    Edit(
+        "Give each download row more vertical room",
+        decoy=True,
+        changes=(
+            (
+                DOWNLOADS,
+                "    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {\n        Text(text = title)",
+                "    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {\n        Text(text = title)",
+            ),
+        ),
+    ),
     Edit(
         "Point the feed's KDoc at the refresh constant",
         changes=(
@@ -249,6 +318,41 @@ DEMO_EDITS = SHARED_EDITS + (
 # other snapshots have it. Most are in SuperPlayer.kt, the plant's own file, and none
 # touches the lines the plant removes.
 LIBRARY_EDITS = SHARED_EDITS + (
+    # Changes in behaviour in the test kit, which is test-only and not in the app a trace
+    # measured: what they change never runs in a trace.
+    Edit(
+        "Give the playback harness 45 s before a wait fails",
+        decoy=True,
+        changes=(
+            (
+                HARNESS,
+                "        private const val MAX_WAIT_MS = 30_000L",
+                "        private const val MAX_WAIT_MS = 45_000L",
+            ),
+        ),
+    ),
+    Edit(
+        "Lengthen the congested-WiFi profile to 40 swings",
+        decoy=True,
+        changes=(
+            (
+                NETWORK,
+                "private const val CONGESTED_WIFI_PAIRS = 30",
+                "private const val CONGESTED_WIFI_PAIRS = 40",
+            ),
+        ),
+    ),
+    Edit(
+        "Use 503, not 500, for the CDN's own trouble",
+        decoy=True,
+        changes=(
+            (
+                FAULTS,
+                "        public const val HTTP_SERVER_ERROR: Int = 500",
+                "        public const val HTTP_SERVER_ERROR: Int = 503",
+            ),
+        ),
+    ),
     Edit(
         "Say why onLowMemory is still forwarded",
         changes=(
@@ -347,34 +451,39 @@ LEAK_PLANT = Edit(
 
 @dataclass(frozen=True)
 class Plant:
+    """The captured change, made as one commit: a devicelab/plants patch read at
+    PLANTS_AT, or, for the plant that was never a patch file, an edit."""
+
     name: str
     message: str
-    patch: str | None = None  # a devicelab/plants patch, read at PLANTS_AT
-    edit: Edit | None = None  # or an edit, for the plant that was never a patch file
+    patch: str | None = None
+    edit: Edit | None = None
+
+    def apply(self, repo: "Repo", tree: str, superplayer: Path) -> str:
+        if self.edit is not None:
+            return self.edit.apply(repo, tree, superplayer)
+        return repo.patch(tree, plant_patch(superplayer, self))
+
+
+def _planted(name: str, message: str) -> Plant:
+    return Plant(name, message, patch=f"devicelab/plants/{name}.patch")
 
 
 PLANTS = {
-    "startup-main-thread-io": Plant(
-        "startup-main-thread-io",
-        "Check the catalog cache at launch",
-        patch="devicelab/plants/startup-main-thread-io.patch",
-    ),
-    "feed-tap-sleep": Plant(
-        "feed-tap-sleep",
-        "Let a quick second tap land on the paused row",
-        patch="devicelab/plants/feed-tap-sleep.patch",
-    ),
-    "feed-grain-allocations": Plant(
-        "feed-grain-allocations",
-        "Veil the feed's stand-ins with a grain while it scrolls",
-        patch="devicelab/plants/feed-grain-allocations.patch",
-    ),
-    "feed-row-remeasure": Plant(
-        "feed-row-remeasure",
-        "Fit each row's title to its width, and let the rows breathe",
-        patch="devicelab/plants/feed-row-remeasure.patch",
-    ),
-    "listener-leak": Plant("listener-leak", LEAK_PLANT.message, edit=LEAK_PLANT),
+    p.name: p
+    for p in (
+        _planted("startup-main-thread-io", "Check the catalog cache at launch"),
+        _planted("feed-tap-sleep", "Let a quick second tap land on the paused row"),
+        _planted(
+            "feed-grain-allocations",
+            "Veil the feed's stand-ins with a grain while it scrolls",
+        ),
+        _planted(
+            "feed-row-remeasure",
+            "Fit each row's title to its width, and let the rows breathe",
+        ),
+        Plant("listener-leak", LEAK_PLANT.message, edit=LEAK_PLANT),
+    )
 }
 
 
@@ -391,6 +500,8 @@ class Case:
     regression: str | None = None
 
 
+# The startup and jank captures were all made on 2026-09-24 (superPlayer PRs #391, #392),
+# and the leak hunt's on 2026-09-11, so a run is named here by its time of day alone.
 def _run(stamp: str, scenario: str) -> str:
     return f"{OUT}/20260924T{stamp}-{scenario}/trace.perfetto-trace"
 
@@ -514,8 +625,9 @@ REUSED_FIXTURES = {
     _run("033648Z", "jank"): "jank-d-current.perfetto-trace.gz",
 }
 
-# The fixed clock every history is laid out on.
-EPOCH = datetime(2026, 8, 3, 9, 0, tzinfo=UTC)
+# A range ends this many days before its current trace was captured, drawn per case:
+# the build that was measured is a little older than the measurement, as in the field.
+DAYS_BEFORE_CAPTURE = (1, 3)
 
 
 class Repo:
@@ -526,19 +638,17 @@ class Repo:
     def __init__(self, path: Path, superplayer: Path):
         self.path = path
         self.superplayer = superplayer
+        self.index = path / "scratch-index"
         self.git("init", "-q")
         objects = superplayer / ".git" / "objects"
         (path / ".git" / "objects" / "info" / "alternates").write_text(f"{objects}\n")
-        self.index = path / "scratch-index"
 
     def git(self, *args: str, input: str | None = None, env: dict | None = None) -> str:
         return subprocess.run(
             ["git", "-c", "commit.gpgsign=false", *args],
             cwd=self.path,
             input=input,
-            env={**os.environ, "GIT_INDEX_FILE": str(self.index), **(env or {})}
-            if hasattr(self, "index")
-            else None,
+            env={**os.environ, "GIT_INDEX_FILE": str(self.index), **(env or {})},
             capture_output=True,
             text=True,
             check=True,
@@ -615,7 +725,11 @@ def plant_patch(superplayer: Path, plant: Plant) -> str:
 
 def check_provenance(superplayer: Path, case: Case) -> None:
     """Each trace was built from the case's base commit, and a planted one with exactly
-    the patch this builds the culprit from: run.json records both."""
+    the patch this builds the culprit from: run.json records both.
+
+    Except for the listener leak, whose runs predate devicelab's --plant and so record
+    no plant at all: which of them carried it is devicelab/leak/README.md's run table,
+    and the edit that rebuilds it is that README's four lines."""
     for side, trace in (("baseline", case.baseline), ("current", case.current)):
         run = json.loads((superplayer / trace).parent.joinpath("run.json").read_text())
         commit = run["superplayer"]["commit"]
@@ -643,31 +757,41 @@ def build_history(
 ) -> tuple[str, str, str | None]:
     """The case's range (base, head) and its culprit, if it has one."""
     rng = random.Random(case.id)
-    edits = rng.sample(unseen_edits(superplayer, case), NEUTRAL_PER_CASE)
-    steps: list[Edit | Plant] = list(edits)
-    if case.plant is not None:
-        steps.insert(rng.randrange(len(steps) + 1), PLANTS[case.plant])
+    plant = PLANTS[case.plant] if case.plant else None
+    length = rng.randint(*RANGE_COMMITS)
+    neutral = length - (1 if plant else 0)
+    unseen = unseen_edits(superplayer, case)
+    decoys = [e for e in unseen if e.decoy]
+    rest = [e for e in unseen if not e.decoy]
+    drawn = rng.sample(decoys, min(len(decoys), rng.randint(*DECOYS_PER_CASE)))
+    steps: list[Edit | Plant] = drawn + rng.sample(rest, neutral - len(drawn))
+    rng.shuffle(steps)
+    if plant:
+        steps.insert(rng.randrange(len(steps) + 1), plant)
+
+    # Laid out backwards from the capture: the root, then one gap before each commit.
+    gaps = [timedelta(minutes=rng.randrange(*COMMIT_GAP_MINUTES)) for _ in steps]
+    when = captured_on(case) - timedelta(days=rng.randint(*DAYS_BEFORE_CAPTURE))
+    when -= sum(gaps, timedelta())
 
     tree = repo.snapshot(case.base)
-    when = EPOCH
-    base = head = repo.commit(tree, None, "Initial import", AUTHORS[0], when)
+    base = head = repo.commit(tree, None, "Initial import", rng.choice(AUTHORS), when)
     culprit = None
-    when += timedelta(days=1)
-    for step in steps:
-        if isinstance(step, Plant):
-            tree = (
-                repo.edit(tree, step.edit)
-                if step.edit
-                else repo.patch(tree, plant_patch(superplayer, step))
-            )
-        else:
-            tree = repo.edit(tree, step)
+    for step, gap in zip(steps, gaps, strict=True):
+        when += gap
+        tree = step.apply(repo, tree, superplayer)
         head = repo.commit(tree, head, step.message, rng.choice(AUTHORS), when)
-        if isinstance(step, Plant):
+        if step is plant:
             culprit = head
-        when += timedelta(minutes=rng.randrange(40, 600))
     repo.git("update-ref", f"refs/heads/{case.id}", head)
     return base, head, culprit
+
+
+def captured_on(case: Case) -> datetime:
+    """Noon UTC on the day the current trace was captured, from its run directory's name
+    (`<yyyymmdd>T<hhmmss>Z-<scenario>`)."""
+    stamp = Path(case.current).parent.name[:8]
+    return datetime.strptime(stamp, "%Y%m%d").replace(hour=12, tzinfo=UTC)
 
 
 def unseen_edits(superplayer: Path, case: Case) -> list[Edit]:
@@ -689,7 +813,7 @@ def unseen_edits(superplayer: Path, case: Case) -> list[Edit]:
         if not any(_word(old).search(seen) for _, old, _ in e.renames)
         and not any(f"{Path(path).name}:" in seen for path, _, _ in e.changes)
     ]
-    if len(unseen) < NEUTRAL_PER_CASE:
+    if len(unseen) < max(RANGE_COMMITS):
         raise SystemExit(
             f"{case.id}: only {len(unseen)} edits its traces cannot contradict"
         )
@@ -698,11 +822,17 @@ def unseen_edits(superplayer: Path, case: Case) -> list[Edit]:
 
 @functools.cache
 def _recorded(trace: Path) -> str:
-    """Every slice name, heap class name and heap field name in the trace, one a line."""
+    """Every name the trace records that source could have chosen, one a line: slice,
+    thread and process names, heap class and field names, stack frame names and log
+    messages."""
     sql = (
         "SELECT DISTINCT name FROM slice"
+        " UNION SELECT DISTINCT name FROM thread"
+        " UNION SELECT DISTINCT name FROM process"
         " UNION SELECT DISTINCT name FROM heap_graph_class"
         " UNION SELECT DISTINCT field_name FROM heap_graph_reference"
+        " UNION SELECT DISTINCT name FROM stack_profile_frame"
+        " UNION SELECT DISTINCT msg FROM android_logs"
     )
     rows = query_trace(sql, trace, max_rows=None)["rows"]
     return "\n".join(str(name) for (name,) in rows if name)

@@ -7,19 +7,24 @@ Its expected answers are in `evals/answers/<id>.json`, a directory the runner re
 to score. `load_inputs` and `load_expected` read one side each, so code that builds the
 model's prompt from `load_inputs` has nothing to leak.
 
-The fixture repo is one git bundle holding a branch per case. `checkout` clones only the
-case's branch into a fresh directory, as `main`, with no remote and no reflog, so git in
-that directory can reach this case's history and nothing that names the bundle or
-another case. Cloning is the runner's setup, before the agent starts; the agent itself
-reads the checkout through `perfettoagent.git` alone.
+The fixture repo is one git bundle holding a branch per case. `stage` gives the runner
+what to hand the model: a directory it names, holding a clone of only the case's branch
+(as `main`, with no remote, no reflog and no other case's objects) and the two traces,
+so no path the model is shown runs through `evals/` or the case id. Staging is the
+runner's setup, before the agent starts, so it makes a clone and writes to it; the agent
+itself reads the clone through `perfettoagent.git` alone, which allows no write.
 
 `evals/build_cases.py` writes all of this from the devicelab captures.
 """
 
 import json
+import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+from perfettoagent.git import _REDIRECTING_ENV, GIT_TIMEOUT_S
 
 # The repo's own evals/ directory. It is not in the wheel: the cases are the repo's
 # fixtures, used from a checkout of it.
@@ -51,9 +56,24 @@ class CaseInputs:
     current: Path
     range_base: str
     range_head: str
-    # The fixture repo the range is in. The runner clones from it; the model is given
-    # the checkout, never this path.
+    # The fixture repo the range is in, holding every case's branch. The runner stages
+    # from it; the model is given the staged clone, never this path, and never
+    # `baseline` or `current` as they are here: their paths run through evals/.
     bundle: Path
+
+    def stage(self, dest: Path) -> "StagedCase":
+        """Everything the model is given, under `dest`, which must not exist yet:
+        `dest/repo` and the two traces as `dest/baseline.perfetto-trace.gz` and
+        `dest/current.perfetto-trace.gz`. The traces are hard links where the
+        filesystem allows, copies where it does not."""
+        dest.mkdir(parents=True)
+        return StagedCase(
+            repo=self.checkout(dest / "repo"),
+            baseline=_link(self.baseline, dest / self.baseline.name),
+            current=_link(self.current, dest / self.current.name),
+            range_base=self.range_base,
+            range_head=self.range_head,
+        )
 
     def checkout(self, dest: Path) -> Path:
         """Clone this case's history into `dest`, which must not exist yet, and return
@@ -67,6 +87,17 @@ class CaseInputs:
         # Unreachable now, but `cat-file` would still read them by sha: drop them.
         _git("-C", str(dest), "gc", "--quiet", "--prune=now")
         return dest
+
+
+@dataclass(frozen=True)
+class StagedCase:
+    """A case as the model is given it: paths under a directory the runner chose."""
+
+    repo: Path
+    baseline: Path
+    current: Path
+    range_base: str
+    range_head: str
 
 
 @dataclass(frozen=True)
@@ -140,5 +171,23 @@ def _read(path: Path) -> dict:
     return value
 
 
+def _link(source: Path, dest: Path) -> Path:
+    try:
+        os.link(source, dest)
+    except OSError:  # another filesystem, or one without hard links
+        shutil.copyfile(source, dest)
+    return dest
+
+
 def _git(*args: str) -> None:
-    subprocess.run(["git", *args], check=True, capture_output=True, text=True)
+    """git for staging, which writes, so not `perfettoagent.git`, whose allow-list is
+    read-only. The same guards otherwise: no redirecting environment, and a timeout."""
+    env = {k: v for k, v in os.environ.items() if k not in _REDIRECTING_ENV}
+    subprocess.run(
+        ["git", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=GIT_TIMEOUT_S,
+    )

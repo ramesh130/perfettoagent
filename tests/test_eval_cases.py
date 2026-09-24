@@ -20,6 +20,7 @@ from perfettoagent.evalcases import (
     EVALS_DIR,
     CaseError,
     CaseInputs,
+    StagedCase,
     list_cases,
     load_expected,
     load_inputs,
@@ -38,8 +39,9 @@ MIN_UNRELATED = 8
 
 # Words that would tell the model what it is looking at, or that it is being tested.
 # Each is matched case-insensitively at the start of a word, so "regress" catches
-# "regression". The plant's code itself is not scanned for these: `Thread.sleep` in the
-# culprit's diff is the evidence the model has to find, not a hint.
+# "regression". The plant's own lines are scanned like every other added line, so its
+# code must not use them either ("slow" is not here: one plant's comment calls an
+# animation "a slow breath", which is not a hint).
 HINT_WORDS = (
     "plant",
     "regress",
@@ -79,10 +81,20 @@ def git(repo: Path, *args: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def checkouts(tmp_path_factory) -> dict[str, Path]:
-    """Every case's fixture repo, cloned the way the runner clones it."""
-    root = tmp_path_factory.mktemp("cases")
-    return {c: load_inputs(c).checkout(root / c) for c in CASES}
+def staged(tmp_path_factory) -> dict[str, StagedCase]:
+    """Every case, staged the way the runner stages it, under names that say nothing."""
+    root = tmp_path_factory.mktemp("runs")
+    return {c: load_inputs(c).stage(root / f"run{i}") for i, c in enumerate(CASES)}
+
+
+@pytest.fixture(scope="module")
+def checkouts(staged) -> dict[str, Path]:
+    return {c: s.repo for c, s in staged.items()}
+
+
+def range_commits(case_id: str, repo: Path) -> list[str]:
+    inputs = load_inputs(case_id)
+    return git(repo, "rev-list", f"{inputs.range_base}..{inputs.range_head}").split()
 
 
 def test_five_planted_cases_and_at_least_five_clean_pairs():
@@ -169,11 +181,8 @@ def test_an_answer_must_agree_with_itself(tmp_path):
 def test_each_range_has_enough_unrelated_commits(checkouts):
     for case_id, repo in checkouts.items():
         inputs = load_inputs(case_id)
-        commits = git(
-            repo, "rev-list", f"{inputs.range_base}..{inputs.range_head}"
-        ).split()
         culprit = load_expected(case_id).culprit
-        unrelated = [c for c in commits if c != culprit]
+        unrelated = [c for c in range_commits(case_id, repo) if c != culprit]
         assert len(unrelated) >= MIN_UNRELATED, case_id
         # The range's base is the root: the baseline trace's build, with no history
         # before it that a model could search instead.
@@ -187,11 +196,16 @@ def test_the_culprit_is_one_commit_inside_its_range(checkouts):
         culprit = load_expected(case_id).culprit
         if culprit is None:
             continue
-        inputs = load_inputs(case_id)
-        commits = git(
-            repo, "rev-list", f"{inputs.range_base}..{inputs.range_head}"
-        ).split()
-        assert commits.count(culprit) == 1, case_id
+        assert range_commits(case_id, repo).count(culprit) == 1, case_id
+
+
+def test_a_range_s_length_does_not_give_away_its_verdict(checkouts):
+    """Planted and clean ranges are drawn from one span of lengths, so a length that
+    only planted ranges have would be a tell (build_cases.RANGE_COMMITS)."""
+    lengths: dict[str, set[int]] = {"regression": set(), "no_regression": set()}
+    for case_id, repo in checkouts.items():
+        lengths[load_expected(case_id).verdict].add(len(range_commits(case_id, repo)))
+    assert lengths["regression"] & lengths["no_regression"]
 
 
 def test_the_culprit_makes_exactly_the_captured_change(checkouts, answers):
@@ -253,6 +267,15 @@ def test_the_scan_finds_a_named_plant(answers):
         "Allocation storm",
     ]
     assert hints_in("Rename the feed's handler", answers) == []
+
+
+def test_staged_paths_say_nothing(staged, answers):
+    """What the model is handed lives where the runner put it, named for its role."""
+    for case_id, case in staged.items():
+        for path in (case.repo, case.baseline, case.current):
+            assert "evals" not in path.parts and case_id not in str(path), path
+            assert hints_in(path.name, answers) == [], path
+        assert case.baseline.read_bytes()[:2] in (b"\x1f\x8b", LFS_POINTER[:2])
 
 
 def test_no_model_visible_input_hints_at_the_plant(answers):
