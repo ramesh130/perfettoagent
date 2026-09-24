@@ -36,7 +36,7 @@ Canned SQL, each tested against a fixture trace with a known answer.
 | `native_unfreed_bytes` | `heap_profile_allocation` | no |
 | `gc_time_ms` | `slice` (`GC`) | no |
 
-- **Blocked on:** open question Q4. Settle it before building the startup metrics.
+- The startup metrics are the median cold start of the app (ADR-0009).
 - **Done when:** every metric has a passing fixture test, and `compute_metric` returns
   `sql_used`.
 
@@ -146,8 +146,9 @@ Settle each one by recording an ADR in `docs/adr/`.
    a local runner needed? Check its scorer interface first. Blocks item 9.
 3. **Q3.** Should `--metric auto` ship in v1? Start with `auto`. If attribution drops more than
    10 points compared with a named metric, report both. Affects items 7 and 9.
-4. **Q4.** Is the `android_startups` stdlib module reliable on API 36 emulator traces? Verify
-   on the first capture. Blocks the startup metrics in item 3.
+4. **Q4.** ~~Is the `android_startups` stdlib module reliable on API 36 emulator traces?~~
+   **Resolved (ADR-0009):** yes. It found all 160 cold starts in the eight #5 captures, and
+   each startup's duration was within 1.1 ms of `am start -W`.
 
 ## Definition of done (v1)
 

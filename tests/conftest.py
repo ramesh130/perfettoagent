@@ -37,7 +37,7 @@ def tiny_trace() -> Path:
     return TINY_TRACE
 
 
-# Traces too large for plain git (about 22 MB each) live in Git LFS: ADR-0004 and
+# Traces too large for plain git (22-29 MB each) live in Git LFS: ADR-0004 and
 # .gitattributes. Named for what they are, a baseline and a current capture, and never
 # for what differs between them (CLAUDE.md, eval integrity).
 LARGE_FIXTURES = FIXTURES / "large"
@@ -71,4 +71,17 @@ def heap_a_pair() -> tuple[Path, Path]:
     return (
         large_fixture("heap-a-baseline.perfetto-trace"),
         large_fixture("heap-a-current.perfetto-trace"),
+    )
+
+
+@pytest.fixture(scope="session")
+def startup_a_trio() -> tuple[Path, Path, Path]:
+    """(baseline, current, rerun): three startup captures of the same app, each 20 cold
+    starts. `current` is after a change; `rerun` is a second capture of the baseline's
+    build, for the clean pair. Gzipped, which trace processor reads as is (ADR-0010).
+    """
+    return (
+        large_fixture("startup-a-baseline.perfetto-trace.gz"),
+        large_fixture("startup-a-current.perfetto-trace.gz"),
+        large_fixture("startup-a-rerun.perfetto-trace.gz"),
     )
