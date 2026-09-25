@@ -101,7 +101,7 @@ OpenAI loop and made `gpt-5.6-luna` the default; `--provider` and `--model` choo
 model (ADR-0020). The done criterion below is met by a live `gpt-5.6-luna` run (ADR-0023).
 #30 added `diagnosis.md`, rendered from the verified `diagnosis.json` (ADR-0024), and #31
 the `--run-json` rules and `read_run_metadata` (ADR-0025), and #49 the `--effort` flag.
-A live `claude-opus-5-5` run waits for an Anthropic key; it does not gate this item.
+A live `claude-opus-5-5` run of the leak case found the same culprit, with every claim kept (ADR-0023).
 
 The prompt states the workflow: establish the metric delta, then localise it in the trace
 (thread, slice, span), then correlate it with the range, then blame.
@@ -134,11 +134,14 @@ goes). Apply the same five plants and capture clean pairs.
   `frame_ui_time_p95_ms` only on this app.
 - **Done when:** its cases are in `evals/cases/`.
 
-### 9. [~] Eval runner and results ([#33](https://github.com/ramesh130/perfettoagent/issues/33) runner)
+### 9. [x] Eval runner and results ([#33](https://github.com/ramesh130/perfettoagent/issues/33) runner)
 Write a local `evals/run_eval.py`, since `evalharness` cannot score these runs (Q2, ADR-0016).
 #33 built it as `perfettoagent eval`, and scored every superPlayer case three times on
 `gpt-5.6-luna` at effort `high` (ADR-0027). #44 added `--provider`, `--model` and
-`--effort`, one results directory per setting, and the cache check (ADR-0029).
+`--effort`, one results directory per setting, and the cache check (ADR-0029). #36 swept
+both apps' cases at four effort levels on `gpt-5.6-luna`, and settled Q3, into the
+generated `evals/results/summary.md` (ADR-0031). `claude-opus-5-5` was not swept, by
+decision: one live run only (ADR-0023).
 Run every case **three times** and sweep effort levels, for each model: `gpt-5.6-luna`, the
 headline, and `claude-opus-5-5`, compared (ADR-0020). Never pool results across models.
 Report:
@@ -181,8 +184,10 @@ Settle each one by recording an ADR in `docs/adr/`.
    **Resolved (ADR-0016):** a local runner. Its scorer sees tool calls without their results
    and returns one float per task, and it refuses repeated runs of a case. Item 9 writes
    `evals/run_eval.py`.
-3. **Q3.** Should `--metric auto` ship in v1? Start with `auto`. If attribution drops more than
-   10 points compared with a named metric, report both. Affects items 7 and 9.
+3. **Q3.** ~~Should `--metric auto` ship in v1?~~
+   **Resolved (ADR-0031):** yes, alone. At `high`, attribution is the same with `auto` as with
+   the named metric (26/26 against 30/30). Detection is lower (26/30 against 30/30), and the
+   summary shows that beside it.
 4. **Q4.** ~~Is the `android_startups` stdlib module reliable on API 36 emulator traces?~~
    **Resolved (ADR-0009):** yes. It found all 160 cold starts in the eight #5 captures, and
    each startup's duration was within 1.1 ms of `am start -W`.

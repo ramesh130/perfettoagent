@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 401322,
+    "delta": 1787,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/PostsRepository.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 399535 in the baseline heap dump to 401322 in the current dump, a delta of 1787 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The increase is concentrated in Compose snapshot state and a generated home-card lambda: SnapshotMutableStateImpl$StateStateRecord increased from 1027 to 1747, ParcelableSnapshotMutableState from 526 to 886, AtomicInt from 610 to 970, and PostCardsKt$$ExternalSyntheticLambda2 from 30 to 360.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN (\n    'androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord',\n    'androidx.compose.runtime.ParcelableSnapshotMutableState',\n    'androidx.compose.runtime.internal.AtomicInt',\n    'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'\n  )\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN (\n    'androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord',\n    'androidx.compose.runtime.ParcelableSnapshotMutableState',\n    'androidx.compose.runtime.internal.AtomicInt',\n    'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'\n  )\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit 9facdf1f56ddf777d1233826fd7fb332945ee418 changed PostCardSimple to create remembered mutable bookmark state, register a repository favorites listener, and use that state for the bookmark UI.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The same commit added a repository-owned favoritesListeners list and appended callbacks to it; this is the likely mechanism retaining the extra PostCards lambdas and Compose state objects observed in the current heap.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN (\n    'androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord',\n    'androidx.compose.runtime.ParcelableSnapshotMutableState',\n    'androidx.compose.runtime.internal.AtomicInt',\n    'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'\n  )\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN (\n    'androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord',\n    'androidx.compose.runtime.ParcelableSnapshotMutableState',\n    'androidx.compose.runtime.internal.AtomicInt',\n    'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'\n  )\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "Because the trace-localized PostCardsKt class corresponds to PostCards.kt, which was changed by 9facdf1f56ddf777d1233826fd7fb332945ee418, the attribution is direct rather than merely correlated with a commit in the range.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN (\n    'androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord',\n    'androidx.compose.runtime.ParcelableSnapshotMutableState',\n    'androidx.compose.runtime.internal.AtomicInt',\n    'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'\n  )\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Only one capture was available for each build, so the magnitude should be confirmed with repeated captures using the same interaction sequence.",
+    "This metric counts reachable Java objects in the final heap dump; it establishes an object-retention regression, not a direct frame-time or latency regression."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 6.489
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "a9f10f6f0f8cd6006c0b9a82187cf893b6e0f45bd7c8acfb24c9961399956a18",
+      "range": "2f8ab7c6f562b5a61ed028d1ba8e0ec6f2baa7df..84928ff8488faca0865dcd17906867071711f8d8"
+    },
+    "tool_calls": 47,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 12426,
+      "cache_read_input_tokens": 393851,
+      "cache_creation_input_tokens": 59050
+    },
+    "usd": 0.037559,
+    "wall_time_s": 252.079
+  }
+}

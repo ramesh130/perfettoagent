@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 399352,
+    "delta": -183,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The selected heap-object metric is lower in the current trace: 399535 reachable objects in baseline versus 399352 in current, so this metric did not worsen.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The class-level differences are also decreases for the largest changed classes shown: float[] falls from 641 to 534 and java.util.WeakHashMap$Entry falls from 275 to 201.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 9,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 9,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The range contains a UI change to the Interests thumbnail size, and blame assigns that changed line to commit f94b545f7b3e7b45b51de9e14750c895ad5d402f; however, the trace evidence shows no heap-object regression, so no culprit is assigned.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Only one capture per side is available, so the small object-count difference may be run-to-run noise.",
+    "This conclusion is limited to final Java-heap reachability; the other canned performance metrics were unavailable in these traces.",
+    "The current capture metadata identifies a debuggable debug build running on an emulator."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 7,
+    "citations_passed": 7,
+    "wall_time_s": 17.253
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "1bf19dfef39812c48e88fa555bb175d666c9802117b75a31a43102fa4a688e96",
+      "range": "62fbee606d77bd491d8bd8eb9d347f49df32d463..87e9f4098fc8e5f29e9bc309aa75db0ea7692e44"
+    },
+    "tool_calls": 25,
+    "usage": {
+      "input_tokens": 21,
+      "output_tokens": 7596,
+      "cache_read_input_tokens": 68539,
+      "cache_creation_input_tokens": 18063
+    },
+    "usd": 0.015006,
+    "wall_time_s": 167.525
+  }
+}

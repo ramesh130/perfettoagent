@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "verdict": "inconclusive",
+  "metric": {
+    "name": "frame_ui_time_p95_ms",
+    "unit": "ms",
+    "baseline": 8.4665,
+    "current": 12.004708,
+    "delta": 3.538208000000001,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The selected app UI-frame p95 increased from 8.4665 ms in baseline to 12.004708 ms in current.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The localized work is on com.example.jetnews's main thread. AndroidOwner:measureAndLayout had a maximum of 2.219958 ms in baseline versus 4.420958 ms in current, while Record View#draw() had a maximum of 3.21575 ms versus 5.304417 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT CASE WHEN s.name GLOB 'ViewPostImeInputStage*' THEN 'ViewPostImeInputStage' ELSE s.name END AS slice_group,\n  count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s\nJOIN thread_track tt ON tt.id=s.track_id\nJOIN thread th ON th.utid=tt.utid\nJOIN process p ON p.upid=th.upid\nWHERE p.name='com.example.jetnews'\n  AND (s.name GLOB 'ViewPostImeInputStage*' OR s.name IN ('postAndWait','AndroidOwner:measureAndLayout','Record View#draw()'))\nGROUP BY slice_group\nORDER BY slice_group",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT CASE WHEN s.name GLOB 'ViewPostImeInputStage*' THEN 'ViewPostImeInputStage' ELSE s.name END AS slice_group,\n  count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s\nJOIN thread_track tt ON tt.id=s.track_id\nJOIN thread th ON th.utid=tt.utid\nJOIN process p ON p.upid=th.upid\nWHERE p.name='com.example.jetnews'\n  AND (s.name GLOB 'ViewPostImeInputStage*' OR s.name IN ('postAndWait','AndroidOwner:measureAndLayout','Record View#draw()'))\nGROUP BY slice_group\nORDER BY slice_group",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The current tail also contains substantially larger wait and input-stage slices: postAndWait reached 14.897167 ms versus 8.071792 ms in baseline, and ViewPostImeInputStage reached 18.2035 ms versus 3.87625 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT CASE WHEN s.name GLOB 'ViewPostImeInputStage*' THEN 'ViewPostImeInputStage' ELSE s.name END AS slice_group,\n  count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s\nJOIN thread_track tt ON tt.id=s.track_id\nJOIN thread th ON th.utid=tt.utid\nJOIN process p ON p.upid=th.upid\nWHERE p.name='com.example.jetnews'\n  AND (s.name GLOB 'ViewPostImeInputStage*' OR s.name IN ('postAndWait','AndroidOwner:measureAndLayout','Record View#draw()'))\nGROUP BY slice_group\nORDER BY slice_group",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT CASE WHEN s.name GLOB 'ViewPostImeInputStage*' THEN 'ViewPostImeInputStage' ELSE s.name END AS slice_group,\n  count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s\nJOIN thread_track tt ON tt.id=s.track_id\nJOIN thread th ON th.utid=tt.utid\nJOIN process p ON p.upid=th.upid\nWHERE p.name='com.example.jetnews'\n  AND (s.name GLOB 'ViewPostImeInputStage*' OR s.name IN ('postAndWait','AndroidOwner:measureAndLayout','Record View#draw()'))\nGROUP BY slice_group\nORDER BY slice_group",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The range contains relevant UI-geometry edits: commit 6213c5a80f4b44de4b2a21e92bf6ef5af1b4f83c changes the PostCards dialog button, and commit ef58dc9dfbf9f06155d11669df2e9ef7040e4ce1 changes SelectTopicButton sizing.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6213c5a80f4b44de4b2a21e92bf6ef5af1b4f83c",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "6213c5a80f4b44de4b2a21e92bf6ef5af1b4f83c",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "ef58dc9dfbf9f06155d11669df2e9ef7040e4ce1",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/SelectTopicButton.kt",
+          "commit": "ef58dc9dfbf9f06155d11669df2e9ef7040e4ce1",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "The traces establish a frame-tail regression, but the localized increase is mixed with wait and input-stage outliers rather than a component-specific trace row. Therefore neither range edit can be attributed as the cause from these captures.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT CASE WHEN s.name GLOB 'ViewPostImeInputStage*' THEN 'ViewPostImeInputStage' ELSE s.name END AS slice_group,\n  count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s\nJOIN thread_track tt ON tt.id=s.track_id\nJOIN thread th ON th.utid=tt.utid\nJOIN process p ON p.upid=th.upid\nWHERE p.name='com.example.jetnews'\n  AND (s.name GLOB 'ViewPostImeInputStage*' OR s.name IN ('postAndWait','AndroidOwner:measureAndLayout','Record View#draw()'))\nGROUP BY slice_group\nORDER BY slice_group",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT CASE WHEN s.name GLOB 'ViewPostImeInputStage*' THEN 'ViewPostImeInputStage' ELSE s.name END AS slice_group,\n  count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s\nJOIN thread_track tt ON tt.id=s.track_id\nJOIN thread th ON th.utid=tt.utid\nJOIN process p ON p.upid=th.upid\nWHERE p.name='com.example.jetnews'\n  AND (s.name GLOB 'ViewPostImeInputStage*' OR s.name IN ('postAndWait','AndroidOwner:measureAndLayout','Record View#draw()'))\nGROUP BY slice_group\nORDER BY slice_group",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "6213c5a80f4b44de4b2a21e92bf6ef5af1b4f83c",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "6213c5a80f4b44de4b2a21e92bf6ef5af1b4f83c",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "ef58dc9dfbf9f06155d11669df2e9ef7040e4ce1",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/SelectTopicButton.kt",
+          "commit": "ef58dc9dfbf9f06155d11669df2e9ef7040e4ce1",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Only one capture is available on each side, so p95 and frame-tail differences can be affected by run-to-run scheduling noise.",
+    "The current capture is from an emulator debug build; this is not a release-device comparison.",
+    "The traces do not provide a component-specific app stack attribution for the changed UI code."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "inconclusive",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 12,
+    "citations_passed": 12,
+    "wall_time_s": 0.569
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "16983c549348073dfcfae3974da2e25809e91b9ec0697ebba8578819f2d087ac",
+      "current_sha256": "1b71ca5689249ae8bc101644ea26425a095435abc5ec51bb1dd635dae652e623",
+      "range": "5ec0b631c744cae6c7aeaebbe3f4ab149d331acd..fef9354ab90b4e0df75e29c6795a9c67fda074f0"
+    },
+    "tool_calls": 93,
+    "usage": {
+      "input_tokens": 66,
+      "output_tokens": 25653,
+      "cache_read_input_tokens": 940872,
+      "cache_creation_input_tokens": 85639
+    },
+    "usd": 0.071024,
+    "wall_time_s": 266.472
+  }
+}

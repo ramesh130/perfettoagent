@@ -39,6 +39,8 @@ select = ["E", "F", "I", "B", "UP"]
 # source exactly cannot be wrapped.
 "evals/build_cases.py" = ["E501"]
 "evals/build_jetnews_cases.py" = ["E501"]
+# Fixtures imported from test_evalrun are parameters here, which F811 misreads.
+"tests/test_summary.py" = ["F811"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

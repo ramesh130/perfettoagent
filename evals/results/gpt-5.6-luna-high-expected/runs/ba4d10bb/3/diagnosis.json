@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "startup_ttid_ms",
+    "unit": "ms",
+    "baseline": 839.504417,
+    "current": 1596.432376,
+    "delta": 756.927959,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "bea44a9561ce48b23fc6102f729f1c78d49b2af5",
+    "files": [
+      "app/src/main/java/com/example/jetnews/JetnewsApplication.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The median cold-start TTID increased from 839.504417 ms to 1596.432376 ms, a 756.927959 ms regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The slowdown is localized to application binding: across 20 cold starts, the median bindApplication duration increased from 355.057126 ms to 1108.132709 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nWITH starts AS (\n  SELECT startup_id, ts, ts_end FROM android_startups\n  WHERE package = 'com.example.jetnews' AND startup_type = 'cold'\n), binds AS (\n  SELECT s.startup_id, b.dur / 1e6 AS bind_ms\n  FROM starts AS s\n  JOIN slice AS b ON b.name = 'bindApplication' AND b.ts <= s.ts_end AND b.ts + b.dur >= s.ts\n  JOIN thread_track AS tt ON b.track_id = tt.id\n  JOIN thread AS t ON tt.utid = t.utid\n  WHERE t.name = 'example.jetnews'\n), ranked AS (\n  SELECT bind_ms, row_number() OVER (ORDER BY bind_ms) AS rank, count(*) OVER () AS n\n  FROM binds\n)\nSELECT count(*) AS cold_starts, min(bind_ms) AS min_bind_ms, max(bind_ms) AS max_bind_ms,\n       (SELECT bind_ms FROM ranked WHERE rank = (n + 1) / 2) AS median_bind_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nWITH starts AS (\n  SELECT startup_id, ts, ts_end FROM android_startups\n  WHERE package = 'com.example.jetnews' AND startup_type = 'cold'\n), binds AS (\n  SELECT s.startup_id, b.dur / 1e6 AS bind_ms\n  FROM starts AS s\n  JOIN slice AS b ON b.name = 'bindApplication' AND b.ts <= s.ts_end AND b.ts + b.dur >= s.ts\n  JOIN thread_track AS tt ON b.track_id = tt.id\n  JOIN thread AS t ON tt.utid = t.utid\n  WHERE t.name = 'example.jetnews'\n), ranked AS (\n  SELECT bind_ms, row_number() OVER (ORDER BY bind_ms) AS rank, count(*) OVER () AS n\n  FROM binds\n)\nSELECT count(*) AS cold_starts, min(bind_ms) AS min_bind_ms, max(bind_ms) AS max_bind_ms,\n       (SELECT bind_ms FROM ranked WHERE rank = (n + 1) / 2) AS median_bind_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit bea44a9561ce48b23fc6102f729f1c78d49b2af5 adds verifyArticleCache() to JetnewsApplication.onCreate(), including creation/checking of a 768 MiB articles.cache file and a full CRC read at launch.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "bea44a9561ce48b23fc6102f729f1c78d49b2af5",
+          "path": "app/src/main/java/com/example/jetnews/JetnewsApplication.kt",
+          "commit": "bea44a9561ce48b23fc6102f729f1c78d49b2af5",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Blame at the range head assigns the launch call and cache-verification implementation to bea44a9561ce48b23fc6102f729f1c78d49b2af5.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "bea44a9561ce48b23fc6102f729f1c78d49b2af5",
+          "path": "app/src/main/java/com/example/jetnews/JetnewsApplication.kt",
+          "commit": "bea44a9561ce48b23fc6102f729f1c78d49b2af5",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This conclusion is based on one baseline capture and one current capture, so run-to-run noise cannot be fully quantified.",
+    "The captures were from a debuggable build on an emulator; absolute startup times may not generalize to production hardware."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 6,
+    "citations_passed": 6,
+    "wall_time_s": 5.719
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "58f6e79fdc6541f98d047bef4ad95d2d62f8ab837486a5cd744f1b070a1257a9",
+      "current_sha256": "a8c5859207241321b887d4692ac0193d5417d97e94763a4b6d53ebc30e70aa68",
+      "range": "4918341a10cb2f9a0d7c1de3e45ce7fec8daab45..81c733e37f8cc7d5ae53e9e963bdf2f6363bc99f"
+    },
+    "tool_calls": 40,
+    "usage": {
+      "input_tokens": 36,
+      "output_tokens": 8421,
+      "cache_read_input_tokens": 274717,
+      "cache_creation_input_tokens": 47876
+    },
+    "usd": 0.027576,
+    "wall_time_s": 154.207
+  }
+}

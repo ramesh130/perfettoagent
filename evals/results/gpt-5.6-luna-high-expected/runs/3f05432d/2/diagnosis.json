@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "frame_ui_time_p95_ms",
+    "unit": "ms",
+    "baseline": 26.299542,
+    "current": 103.761958,
+    "delta": 77.462416,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "e15d633e79d2608f074e9c50a18f3064e15830d7",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The UI-time p95 increased from 26.299542 ms in baseline to 103.761958 ms in current, a 77.462416 ms regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The slow work is on com.example.jetnews's UI thread: its maximum doFrame grew from 59.515916 ms in baseline to 268.590125 ms in current.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nSELECT p.name AS process_name, t.tid, t.name AS thread_name,\n  COUNT(*) AS do_frame_count, MAX(s.dur) / 1e6 AS max_do_frame_ms\nFROM android_frames_choreographer_do_frame AS d\nJOIN slice AS s USING (id)\nJOIN thread_track AS tt ON s.track_id = tt.id\nJOIN thread AS t USING (utid)\nJOIN process AS p USING (upid)\nGROUP BY p.name, t.tid, t.name\nORDER BY do_frame_count DESC\nLIMIT 10",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nSELECT p.name AS process_name, t.tid, t.name AS thread_name,\n  COUNT(*) AS do_frame_count, MAX(s.dur) / 1e6 AS max_do_frame_ms\nFROM android_frames_choreographer_do_frame AS d\nJOIN slice AS s USING (id)\nJOIN thread_track AS tt ON s.track_id = tt.id\nJOIN thread AS t USING (utid)\nJOIN process AS p USING (upid)\nGROUP BY p.name, t.tid, t.name\nORDER BY do_frame_count DESC\nLIMIT 10",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The current trace contains 536157 TextLayout:initLayout slices totaling 14372.316042 ms, while the baseline contains none; traversal also reaches 263.646208 ms in current versus 58.587958 ms in baseline.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT\n  COUNT(CASE WHEN name = 'traversal' THEN 1 END) AS traversal_count,\n  COALESCE(SUM(CASE WHEN name = 'traversal' THEN dur ELSE 0 END), 0) / 1e6 AS traversal_total_ms,\n  MAX(CASE WHEN name = 'traversal' THEN dur ELSE NULL END) / 1e6 AS traversal_max_ms,\n  COUNT(CASE WHEN name = 'TextLayout:initLayout' THEN 1 END) AS text_layout_count,\n  COALESCE(SUM(CASE WHEN name = 'TextLayout:initLayout' THEN dur ELSE 0 END), 0) / 1e6 AS text_layout_total_ms,\n  COUNT(CASE WHEN name = 'Constructing StaticLayout' THEN 1 END) AS static_layout_count,\n  COALESCE(SUM(CASE WHEN name = 'Constructing StaticLayout' THEN dur ELSE 0 END), 0) / 1e6 AS static_layout_total_ms\nFROM slice",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT\n  COUNT(CASE WHEN name = 'traversal' THEN 1 END) AS traversal_count,\n  COALESCE(SUM(CASE WHEN name = 'traversal' THEN dur ELSE 0 END), 0) / 1e6 AS traversal_total_ms,\n  MAX(CASE WHEN name = 'traversal' THEN dur ELSE NULL END) / 1e6 AS traversal_max_ms,\n  COUNT(CASE WHEN name = 'TextLayout:initLayout' THEN 1 END) AS text_layout_count,\n  COALESCE(SUM(CASE WHEN name = 'TextLayout:initLayout' THEN dur ELSE 0 END), 0) / 1e6 AS text_layout_total_ms,\n  COUNT(CASE WHEN name = 'Constructing StaticLayout' THEN 1 END) AS static_layout_count,\n  COALESCE(SUM(CASE WHEN name = 'Constructing StaticLayout' THEN dur ELSE 0 END), 0) / 1e6 AS static_layout_total_ms\nFROM slice",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Commit e15d633e79d2608f074e9c50a18f3064e15830d7 changed PostCards.kt to add a per-title TextMeasurer loop and an infinite row-breath animation; blame assigns those lines to that same commit.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "e15d633e79d2608f074e9c50a18f3064e15830d7",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "e15d633e79d2608f074e9c50a18f3064e15830d7",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "The trace-localized text-layout and traversal increase directly match the new PostCards.kt work, so e15d633e79d2608f074e9c50a18f3064e15830d7 is the direct culprit.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT\n  COUNT(CASE WHEN name = 'traversal' THEN 1 END) AS traversal_count,\n  COALESCE(SUM(CASE WHEN name = 'traversal' THEN dur ELSE 0 END), 0) / 1e6 AS traversal_total_ms,\n  MAX(CASE WHEN name = 'traversal' THEN dur ELSE NULL END) / 1e6 AS traversal_max_ms,\n  COUNT(CASE WHEN name = 'TextLayout:initLayout' THEN 1 END) AS text_layout_count,\n  COALESCE(SUM(CASE WHEN name = 'TextLayout:initLayout' THEN dur ELSE 0 END), 0) / 1e6 AS text_layout_total_ms,\n  COUNT(CASE WHEN name = 'Constructing StaticLayout' THEN 1 END) AS static_layout_count,\n  COALESCE(SUM(CASE WHEN name = 'Constructing StaticLayout' THEN dur ELSE 0 END), 0) / 1e6 AS static_layout_total_ms\nFROM slice",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "e15d633e79d2608f074e9c50a18f3064e15830d7",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "e15d633e79d2608f074e9c50a18f3064e15830d7",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Each side has only one capture, so exact percentile values include run-to-run noise.",
+    "The captures are from a debuggable build on an Android emulator; absolute timings may differ on physical release builds."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 9,
+    "citations_passed": 9,
+    "wall_time_s": 13.946
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "9e453612a6eae79bebd6fd42455016b85e8895dd39a347dc986947bc44ac50c5",
+      "current_sha256": "08a804675d42de7660d10ec74699aedd8b6221e5c50c2a11b88d534333d6cdb0",
+      "range": "1a2887a1c72acb4311357fd0fc34bb9dd482acfe..056ebc56e474567c92cdcb9b5fec04977a870845"
+    },
+    "tool_calls": 20,
+    "usage": {
+      "input_tokens": 27,
+      "output_tokens": 8294,
+      "cache_read_input_tokens": 93744,
+      "cache_creation_input_tokens": 21114
+    },
+    "usd": 0.017112,
+    "wall_time_s": 116.963
+  }
+}

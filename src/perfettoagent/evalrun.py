@@ -16,6 +16,11 @@ metric choice: results from different settings are never pooled (ADR-0020). Once
 every run has a result, the runs are scored against `evals/answers/`
 (`perfettoagent.scoring`) and written as `scores.json` and `scores.md`. The answers
 are read only to score, after the runs.
+
+One exception, for roadmap Q3 (ADR-0031): with `metric="expected"`, each planted case
+is run with `--metric` set to the first metric its answer expects, and clean pairs are
+not run, having no metric to name. The model is then told which metric to judge by,
+which is the condition Q3 compares against `auto`; it is never told the culprit.
 """
 
 import json
@@ -26,6 +31,9 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 from pathlib import Path
 
+import anthropic
+import openai
+
 from perfettoagent import models, run_metadata
 from perfettoagent.agent import AUTO, RUN_ERRORS, diagnose
 from perfettoagent.credentials import redact
@@ -35,6 +43,28 @@ from perfettoagent.scoring import Outcome, outcome_of, score
 
 # CLAUDE.md: every case three times, and the spread reported.
 RUNS = 3
+
+# The provider declining to serve at all: an exhausted quota, a rate limit, a key it
+# refuses. The run says nothing about the model, so it is not recorded; the eval stops,
+# and a resume runs it again (ADR-0031). OpenAI reports a streamed failure as a plain
+# APIError, so its `code` is read too.
+_UNAVAILABLE = (
+    anthropic.AuthenticationError,
+    anthropic.PermissionDeniedError,
+    anthropic.RateLimitError,
+    openai.AuthenticationError,
+    openai.PermissionDeniedError,
+    openai.RateLimitError,
+)
+_UNAVAILABLE_CODES = {"insufficient_quota", "rate_limit_exceeded"}
+
+
+class ProviderUnavailable(RuntimeError):
+    """The provider would not serve a run; nothing was recorded for it."""
+
+
+# `run_eval(metric=EXPECTED)`: each planted case judged by the metric it expects.
+EXPECTED = "expected"
 
 # Where results go: one directory per model, effort and metric choice.
 RESULTS_DIR = EVALS_DIR / "results"
@@ -66,7 +96,16 @@ def run_eval(
     result under `out`, and returns the scores, also written to `out`."""
     model = model or models.DEFAULT_MODELS[provider]
     models.check_model(provider, model, effort)
-    cases = cases if cases is not None else list_cases(root)
+    chosen = cases is not None
+    cases = cases if chosen else list_cases(root)
+    named = _named_metrics(cases, root) if metric == EXPECTED else {}
+    if metric == EXPECTED:
+        clean = [c for c in cases if c not in named]
+        if chosen and clean:
+            raise SystemExit(
+                f"--metric {EXPECTED} runs planted cases only, not {', '.join(clean)}"
+            )
+        cases = [c for c in cases if c in named]
     for case_id in cases:
         _check_fetched(load_inputs(case_id, root))
     settings = {
@@ -89,8 +128,10 @@ def run_eval(
                     "different settings are never pooled; use another --out"
                 )
             return Outcome(**recorded["outcome"])
-        outcome = _run_once(case_id, n, directory, settings, root, diagnose_fn)
-        _write_json(result, {**settings, "outcome": asdict(outcome)})
+        asked = {**settings, "metric": named.get(case_id, metric)}
+        outcome = _run_once(case_id, n, directory, asked, root, diagnose_fn)
+        judged_by = {"named_metric": asked["metric"]} if metric == EXPECTED else {}
+        _write_json(result, {**settings, **judged_by, "outcome": asdict(outcome)})
         log(_line(outcome))
         return outcome
 
@@ -104,6 +145,16 @@ def run_eval(
     _write_json(out / "scores.json", scores)
     (out / "scores.md").write_text(render_scores(scores))
     return scores
+
+
+def _named_metrics(cases: list[str], root: Path) -> dict[str, str]:
+    """Each planted case's first expected metric. Clean pairs have none."""
+    named = {}
+    for case_id in cases:
+        expected = load_expected(case_id, root)
+        if expected.metrics:
+            named[case_id] = expected.metrics[0]
+    return named
 
 
 def _run_once(case_id, n, directory: Path, settings: dict, root, diagnose_fn):
@@ -123,6 +174,12 @@ def _run_once(case_id, n, directory: Path, settings: dict, root, diagnose_fn):
                 metadata=run_metadata.load(staged.run_metadata),
             )
         except RUN_ERRORS as e:
+            if _unavailable(e):
+                raise ProviderUnavailable(
+                    f"{case_id} run {n}: the provider would not serve it: "
+                    f"{redact(str(e))[:300]}. Nothing was recorded for it; run the "
+                    "eval again, once the provider serves, to resume."
+                ) from e
             # Recorded, and the sweep goes on. Anything else (a refused range, an
             # unpriced model) is the runner's own mistake, and raises.
             return Outcome(
@@ -132,6 +189,10 @@ def _run_once(case_id, n, directory: Path, settings: dict, root, diagnose_fn):
     _write_json(directory / "diagnosis.json", diagnosis)
     (directory / "diagnosis.md").write_text(render(diagnosis))
     return outcome_of(case_id, n, diagnosis)
+
+
+def _unavailable(e: Exception) -> bool:
+    return isinstance(e, _UNAVAILABLE) or getattr(e, "code", None) in _UNAVAILABLE_CODES
 
 
 def _check_fetched(inputs) -> None:

@@ -8,7 +8,14 @@ from pathlib import Path
 from perfettoagent import models, run_metadata
 from perfettoagent.agent import AUTO, RUN_ERRORS, diagnose
 from perfettoagent.credentials import redact
-from perfettoagent.evalrun import RESULTS_DIR, RUNS, results_name, run_eval
+from perfettoagent.evalrun import (
+    EXPECTED,
+    RESULTS_DIR,
+    RUNS,
+    ProviderUnavailable,
+    results_name,
+    run_eval,
+)
 from perfettoagent.git import GitError
 from perfettoagent.metrics import UnknownMetric
 from perfettoagent.query import MAX_ROWS, QueryRejected, query_trace
@@ -148,6 +155,15 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"the reasoning effort (default: {models.DEFAULT_EFFORT})",
     )
     ev.add_argument(
+        "--metric",
+        choices=(AUTO, EXPECTED),
+        default=AUTO,
+        help=(
+            f"{AUTO} (default): the agent chooses; {EXPECTED}: each planted case is "
+            "judged by the metric it expects, and clean pairs are not run (roadmap Q3)"
+        ),
+    )
+    ev.add_argument(
         "--out",
         type=Path,
         help="the results directory (default: evals/results/<model>-<effort>-<metric>)",
@@ -272,7 +288,7 @@ def _eval(args: argparse.Namespace) -> int:
         print("perfettoagent eval: rejected: --runs and --jobs are at least 1",
               file=sys.stderr)  # fmt: skip
         return EXIT_REJECTED
-    provider, effort, metric = args.provider, args.effort, AUTO
+    provider, effort, metric = args.provider, args.effort, args.metric
     model = args.model or models.DEFAULT_MODELS[provider]
     try:
         models.check_model(provider, model, effort)
@@ -280,16 +296,20 @@ def _eval(args: argparse.Namespace) -> int:
         print(f"perfettoagent eval: rejected: {e}", file=sys.stderr)
         return EXIT_REJECTED
     out = args.out or RESULTS_DIR / results_name(model, effort, metric)
-    scores = run_eval(
-        out,
-        cases=args.cases,
-        runs=args.runs,
-        provider=provider,
-        model=model,
-        effort=effort,
-        metric=metric,
-        jobs=args.jobs,
-    )
+    try:
+        scores = run_eval(
+            out,
+            cases=args.cases,
+            runs=args.runs,
+            provider=provider,
+            model=model,
+            effort=effort,
+            metric=metric,
+            jobs=args.jobs,
+        )
+    except ProviderUnavailable as e:
+        print(f"perfettoagent eval: {e}", file=sys.stderr)
+        return EXIT_FAILED
     rates = scores["rates"]
     print(
         f"detection {rates['detection']['hits']}/{rates['detection']['of']}, "

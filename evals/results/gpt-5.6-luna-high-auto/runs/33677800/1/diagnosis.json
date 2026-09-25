@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "frame_p95_ms",
+    "unit": "ms",
+    "baseline": 74.524125,
+    "current": 73.112917,
+    "delta": -1.411208000000002,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "medium",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The selected UI-frame p95 improved from 74.524125 ms in baseline to 73.112917 ms in current, a delta of -1.411208 ms; this is not a regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The selected app's main Compose work also did not increase: total Compose:recompose, Compose:initializeView, and Compose:applyChanges durations were lower in current than baseline.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT s.name, count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tr ON tr.id=s.track_id\nJOIN thread AS t ON t.utid=tr.utid\nJOIN process AS p ON p.upid=t.upid\nWHERE p.name='com.example.jetnews' AND s.name IN ('Compose:recompose','Compose:initializeView','Compose:applyChanges')\nGROUP BY s.name ORDER BY s.name;",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.name, count(*) AS occurrences, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tr ON tr.id=s.track_id\nJOIN thread AS t ON t.utid=tr.utid\nJOIN process AS p ON p.upid=t.upid\nWHERE p.name='com.example.jetnews' AND s.name IN ('Compose:recompose','Compose:initializeView','Compose:applyChanges')\nGROUP BY s.name ORDER BY s.name;",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Both traces recorded 20 class-verification slices for com.example.jetnews.ui.interests.InterestsScreenKt, but neither trace shows an increase in that count.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT name, count(*) AS occurrences\nFROM slice\nWHERE name = 'VerifyClass com.example.jetnews.ui.interests.InterestsScreenKt'\nGROUP BY name;",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT name, count(*) AS occurrences\nFROM slice\nWHERE name = 'VerifyClass com.example.jetnews.ui.interests.InterestsScreenKt'\nGROUP BY name;",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The range's relevant UI changes are the smaller Interests-row thumbnail and divider in InterestsScreen.kt, introduced by cd4f22cbbddcc8efac9413ac2678b06e321492aa, and the 40 dp topic-selection button introduced by 3e2fdaf2216b048731671bb61bd0fe7d2f2372a8; neither is supported as a performance culprit by the measured frame data.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "cd4f22cbbddcc8efac9413ac2678b06e321492aa",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "cd4f22cbbddcc8efac9413ac2678b06e321492aa",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/SelectTopicButton.kt",
+          "commit": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This conclusion is based on one capture per side, so small differences can be run-to-run noise.",
+    "The current capture metadata identifies a debuggable build on an SDK 36 emulator.",
+    "Startup TTID and binder-wait totals moved independently of the selected frame-p95 metric; they were not used to declare a frame-performance regression."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 18.604
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "58f6e79fdc6541f98d047bef4ad95d2d62f8ab837486a5cd744f1b070a1257a9",
+      "current_sha256": "a90ad2b7002241fa3765ab086355ce11efc4c140c12b7a44e475682f514480cd",
+      "range": "20c3d5cf9b136abfcaa90ef97297c28501c31f4a..bb767eec9f98c0e9493140735e2e477828fcb9b1"
+    },
+    "tool_calls": 63,
+    "usage": {
+      "input_tokens": 48,
+      "output_tokens": 11060,
+      "cache_read_input_tokens": 336743,
+      "cache_creation_input_tokens": 36079
+    },
+    "usd": 0.029036,
+    "wall_time_s": 301.816
+  }
+}

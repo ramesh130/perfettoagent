@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 399352,
+    "delta": -183,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects decreased from 399535 in the baseline to 399352 in the current trace, a measured delta of -183 objects; this is not a regression in the selected metric.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "Both heap graphs belong to the com.example.jetnews process.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT p.upid, p.name AS process_name, p.pid\nFROM process AS p\nWHERE p.upid IN (SELECT DISTINCT upid FROM android_heap_graph_class_aggregation)\nORDER BY p.upid",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT p.upid, p.name AS process_name, p.pid\nFROM process AS p\nWHERE p.upid IN (SELECT DISTINCT upid FROM android_heap_graph_class_aggregation)\nORDER BY p.upid",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The largest reductions are in generic runtime classes: float[] fell from 641 to 534 objects and java.util.WeakHashMap$Entry fell from 275 to 201 objects; the changed-class rows do not identify an app class or method.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 9,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 9,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The range includes the thumbnail-size change in f94b545f7b3e7b45b51de9e14750c895ad5d402f, but the heap localization does not point to that Kotlin code, so no commit is directly attributed.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 9,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This is one capture per side; the small object-count decrease may be run-to-run noise rather than a meaningful memory improvement.",
+    "The selected metric is reachable-object count from the final Java heap graph, not allocation rate, retained bytes, or frame latency.",
+    "The current run metadata identifies a debuggable debug build on an sdk_gphone64_arm64 emulator; baseline build metadata was not available."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c5",
+      "text": "The frame_p95_ms metric is unavailable because its SQL returns NULL on both traces, so these captures cannot establish a frame-latency regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 11 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+        }
+      ],
+      "reason": "citation 2: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 11 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+    }
+  ],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 9,
+    "wall_time_s": 11.781
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "1bf19dfef39812c48e88fa555bb175d666c9802117b75a31a43102fa4a688e96",
+      "range": "62fbee606d77bd491d8bd8eb9d347f49df32d463..87e9f4098fc8e5f29e9bc309aa75db0ea7692e44"
+    },
+    "tool_calls": 44,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 13921,
+      "cache_read_input_tokens": 187411,
+      "cache_creation_input_tokens": 26706
+    },
+    "usd": 0.027138,
+    "wall_time_s": 251.269
+  }
+}

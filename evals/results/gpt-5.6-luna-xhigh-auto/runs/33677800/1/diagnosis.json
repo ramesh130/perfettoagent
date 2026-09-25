@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "verdict": "inconclusive",
+  "metric": {
+    "name": "startup_ttid_ms",
+    "unit": "ms",
+    "baseline": 839.504417,
+    "current": 854.851167,
+    "delta": 15.346750000000043,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Median cold-start TTID increased from 839.504417 ms to 854.851167 ms across 20 starts per trace, a delta of 15.346750000000043 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold WHERE ns IS NOT NULL\n)\nSELECT count(*) AS cold_start_count,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS median_ttid_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold WHERE ns IS NOT NULL\n)\nSELECT count(*) AS cold_start_count,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS median_ttid_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The distribution does not show a broad tail regression: the 75th percentile is 860.496126 ms in baseline and 860.762792 ms in current, although the median differs.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold WHERE ns IS NOT NULL\n)\nSELECT count(*) AS cold_start_count,\n       min(ns) / 1e6 AS min_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 3) / 4) AS p25_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS median_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (3 * n + 3) / 4) AS p75_ttid_ms,\n       max(ns) / 1e6 AS max_ttid_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold WHERE ns IS NOT NULL\n)\nSELECT count(*) AS cold_start_count,\n       min(ns) / 1e6 AS min_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 3) / 4) AS p25_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS median_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (3 * n + 3) / 4) AS p75_ttid_ms,\n       max(ns) / 1e6 AS max_ttid_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The localized activity is the Jetnews main thread, named example.jetnews. Current startup slices have 1305.409711 ms in clientTransactionExecuted versus 1079.641335 ms in baseline, while bindApplication decreases from 7234.161254 ms to 6554.871669 ms; this does not identify a changed app source method.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nWITH starts AS (\n  SELECT s.startup_id, s.ts, s.ts_end, p.upid\n  FROM android_startups AS s\n  JOIN android_startup_processes AS p USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), main AS (\n  SELECT DISTINCT st.startup_id, st.ts, st.ts_end, st.upid, t.utid, t.name AS thread_name\n  FROM starts AS st\n  JOIN thread AS t ON t.upid = st.upid\n  WHERE t.is_main_thread\n), slices AS (\n  SELECT m.startup_id, m.thread_name, s.name, s.dur\n  FROM main AS m\n  JOIN thread_track AS tt ON tt.utid = m.utid\n  JOIN slice AS s ON s.track_id = tt.id\n  WHERE s.ts >= m.ts AND s.ts < m.ts_end AND s.depth = 0 AND s.dur > 0\n)\nSELECT thread_name, count(DISTINCT startup_id) AS cold_starts,\n       sum(CASE WHEN name = 'bindApplication' THEN dur ELSE 0 END) / 1e6 AS bind_application_ms,\n       sum(CASE WHEN name = 'clientTransactionExecuted' THEN dur ELSE 0 END) / 1e6 AS client_transaction_ms,\n       sum(CASE WHEN name = 'ActivityThreadMain' THEN dur ELSE 0 END) / 1e6 AS activity_thread_main_ms\nFROM slices\nGROUP BY thread_name",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nWITH starts AS (\n  SELECT s.startup_id, s.ts, s.ts_end, p.upid\n  FROM android_startups AS s\n  JOIN android_startup_processes AS p USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), main AS (\n  SELECT DISTINCT st.startup_id, st.ts, st.ts_end, st.upid, t.utid, t.name AS thread_name\n  FROM starts AS st\n  JOIN thread AS t ON t.upid = st.upid\n  WHERE t.is_main_thread\n), slices AS (\n  SELECT m.startup_id, m.thread_name, s.name, s.dur\n  FROM main AS m\n  JOIN thread_track AS tt ON tt.utid = m.utid\n  JOIN slice AS s ON s.track_id = tt.id\n  WHERE s.ts >= m.ts AND s.ts < m.ts_end AND s.depth = 0 AND s.dur > 0\n)\nSELECT thread_name, count(DISTINCT startup_id) AS cold_starts,\n       sum(CASE WHEN name = 'bindApplication' THEN dur ELSE 0 END) / 1e6 AS bind_application_ms,\n       sum(CASE WHEN name = 'clientTransactionExecuted' THEN dur ELSE 0 END) / 1e6 AS client_transaction_ms,\n       sum(CASE WHEN name = 'ActivityThreadMain' THEN dur ELSE 0 END) / 1e6 AS activity_thread_main_ms\nFROM slices\nGROUP BY thread_name",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The range changes a topic-selection button size and a widget refresh interval; blame assigns those lines to 3e2fdaf2216b048731671bb61bd0fe7d2f2372a8 and 432218a1e58c49007d18fae8bd3d76fa40b57272 respectively. The MainActivity change is a variable rename.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/SelectTopicButton.kt",
+          "commit": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "432218a1e58c49007d18fae8bd3d76fa40b57272",
+          "path": "app/src/main/res/values/integers.xml",
+          "commit": "432218a1e58c49007d18fae8bd3d76fa40b57272",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "c2c776e1f353e8994eb20a2d1c17589fe789df9a",
+          "path": "app/src/main/java/com/example/jetnews/ui/MainActivity.kt",
+          "commit": "c2c776e1f353e8994eb20a2d1c17589fe789df9a",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "The median TTID increase is therefore not attributable to a specific commit in this range; the observed change is consistent with capture-to-capture startup noise rather than an established range regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold WHERE ns IS NOT NULL\n)\nSELECT count(*) AS cold_start_count,\n       min(ns) / 1e6 AS min_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 3) / 4) AS p25_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS median_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (3 * n + 3) / 4) AS p75_ttid_ms,\n       max(ns) / 1e6 AS max_ttid_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (\n  SELECT d.time_to_initial_display AS ns\n  FROM android_startups AS s\n  JOIN android_startup_time_to_display AS d USING (startup_id)\n  WHERE s.package = 'com.example.jetnews' AND s.startup_type = 'cold'\n), ranked AS (\n  SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n  FROM cold WHERE ns IS NOT NULL\n)\nSELECT count(*) AS cold_start_count,\n       min(ns) / 1e6 AS min_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 3) / 4) AS p25_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS median_ttid_ms,\n       (SELECT ns / 1e6 FROM ranked WHERE rank = (3 * n + 3) / 4) AS p75_ttid_ms,\n       max(ns) / 1e6 AS max_ttid_ms\nFROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/SelectTopicButton.kt",
+          "commit": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "432218a1e58c49007d18fae8bd3d76fa40b57272",
+          "path": "app/src/main/res/values/integers.xml",
+          "commit": "432218a1e58c49007d18fae8bd3d76fa40b57272",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "c2c776e1f353e8994eb20a2d1c17589fe789df9a",
+          "path": "app/src/main/java/com/example/jetnews/ui/MainActivity.kt",
+          "commit": "c2c776e1f353e8994eb20a2d1c17589fe789df9a",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Only one baseline capture and one current capture are available; the traces contain 20 cold starts each, but cross-capture startup timing remains noisy.",
+    "The current run is a debuggable debug build on the sdk_gphone64_arm64 emulator (SDK 36), which limits confidence in small timing differences.",
+    "The trace localization reaches top-level startup slices and the main thread, not a source line or a uniquely identified application method."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "inconclusive",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 14,
+    "citations_passed": 14,
+    "wall_time_s": 28.463
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "58f6e79fdc6541f98d047bef4ad95d2d62f8ab837486a5cd744f1b070a1257a9",
+      "current_sha256": "a90ad2b7002241fa3765ab086355ce11efc4c140c12b7a44e475682f514480cd",
+      "range": "20c3d5cf9b136abfcaa90ef97297c28501c31f4a..bb767eec9f98c0e9493140735e2e477828fcb9b1"
+    },
+    "tool_calls": 75,
+    "usage": {
+      "input_tokens": 60,
+      "output_tokens": 20883,
+      "cache_read_input_tokens": 457193,
+      "cache_creation_input_tokens": 50868
+    },
+    "usd": 0.046932,
+    "wall_time_s": 439.506
+  }
+}

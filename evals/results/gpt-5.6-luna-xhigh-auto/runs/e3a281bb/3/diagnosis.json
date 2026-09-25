@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 401322,
+    "delta": 1787,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 399535 in the baseline to 401322 in the current trace, a delta of 1787 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The increase is localized to Compose state and the home-screen bookmark listener closure: PostCardsKt$$ExternalSyntheticLambda2 grew from 30 to 360 objects, while ParcelableSnapshotMutableState grew from 526 to 886 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name AS type_name, COUNT(*) AS reachable_objects, SUM(o.self_size) AS self_bytes, SUM(o.native_size) AS native_bytes FROM heap_graph_object AS o JOIN heap_graph_class AS c ON c.id=o.type_id WHERE o.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object) AND c.name IN ('com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2','androidx.compose.runtime.ParcelableSnapshotMutableState','androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','com.example.jetnews.data.posts.impl.FakePostsRepository') GROUP BY c.name ORDER BY c.name",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS type_name, COUNT(*) AS reachable_objects, SUM(o.self_size) AS self_bytes, SUM(o.native_size) AS native_bytes FROM heap_graph_object AS o JOIN heap_graph_class AS c ON c.id=o.type_id WHERE o.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object) AND c.name IN ('com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2','androidx.compose.runtime.ParcelableSnapshotMutableState','androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','com.example.jetnews.data.posts.impl.FakePostsRepository') GROUP BY c.name ORDER BY c.name",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "In the current com.example.jetnews heap, FakePostsRepository.favoritesListeners points to an ArrayList whose backing array retains PostCardsKt$$ExternalSyntheticLambda2 instances; those closures reference both a Post and a ParcelableSnapshotMutableState.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT p.upid, p.pid, p.name FROM process AS p JOIN android_heap_graph_class_aggregation AS h ON h.upid = p.upid GROUP BY p.upid, p.pid, p.name",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT r.owner_id, r.owned_id, r.field_name, r.field_type_name, c2.name AS owned_type FROM heap_graph_reference AS r JOIN heap_graph_object AS o2 ON o2.id = r.owned_id JOIN heap_graph_class AS c2 ON c2.id = o2.type_id WHERE r.owner_id = 12793 ORDER BY r.field_name, r.owned_id",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT r.owner_id, r.owned_id, r.field_name, r.field_type_name, c.name AS owned_type FROM heap_graph_reference AS r JOIN heap_graph_object AS o ON o.id=r.owned_id JOIN heap_graph_class AS c ON c.id=o.type_id WHERE r.owner_id = 23150 LIMIT 50",
+          "row_count": 50,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT r.owner_id, r.owned_id, r.field_name, r.field_type_name, c.name AS owner_type, c2.name AS owned_type FROM heap_graph_reference AS r LEFT JOIN heap_graph_object AS o ON o.id = r.owner_id LEFT JOIN heap_graph_class AS c ON c.id = o.type_id LEFT JOIN heap_graph_object AS o2 ON o2.id = r.owned_id LEFT JOIN heap_graph_class AS c2 ON c2.id = o2.type_id WHERE r.owner_id IN (SELECT o.id FROM heap_graph_object AS o JOIN heap_graph_class AS c ON c.id = o.type_id WHERE c.name = 'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2') LIMIT 50",
+          "row_count": 50,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Commit 9facdf1f56ddf777d1233826fd7fb332945ee418 introduced the PostCard call to addFavoritesListener and the FakePostsRepository list that appends listeners without a corresponding removal; blame at the range head assigns these relevant lines to that commit.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This conclusion compares one heap snapshot per side; repeat captures would strengthen confidence in the absolute object-count delta.",
+    "The regression identified here is reachable-heap growth rather than a measured UI frame-latency regression."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 9.038
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "a9f10f6f0f8cd6006c0b9a82187cf893b6e0f45bd7c8acfb24c9961399956a18",
+      "range": "2f8ab7c6f562b5a61ed028d1ba8e0ec6f2baa7df..84928ff8488faca0865dcd17906867071711f8d8"
+    },
+    "tool_calls": 57,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 13564,
+      "cache_read_input_tokens": 283414,
+      "cache_creation_input_tokens": 40188
+    },
+    "usd": 0.032,
+    "wall_time_s": 260.066
+  }
+}

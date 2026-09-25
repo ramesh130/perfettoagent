@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "verdict": "inconclusive",
+  "metric": {
+    "name": "frame_ui_time_p95_ms",
+    "unit": "ms",
+    "baseline": 26.206625,
+    "current": 26.550666,
+    "delta": 0.3440410000000007,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The app UI frame p95 increased from 26.206625 ms in the baseline to 26.550666 ms in the current trace, a 0.344041 ms delta.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The frame-producing process is com.example.jetnews on the example.jetnews UI thread in both traces; it supplied 2120 baseline frames and 2107 current frames.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nSELECT f.upid, p.name AS process_name, f.ui_thread_utid, t.name AS ui_thread_name, count(*) AS frame_count\nFROM android_frames_layers AS f\nJOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\nJOIN process AS p USING (upid)\nJOIN thread AS t ON t.utid = f.ui_thread_utid\nWHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\nGROUP BY f.upid, p.name, f.ui_thread_utid, t.name\nORDER BY frame_count DESC",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nSELECT f.upid, p.name AS process_name, f.ui_thread_utid, t.name AS ui_thread_name, count(*) AS frame_count\nFROM android_frames_layers AS f\nJOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\nJOIN process AS p USING (upid)\nJOIN thread AS t ON t.utid = f.ui_thread_utid\nWHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\nGROUP BY f.upid, p.name, f.ui_thread_utid, t.name\nORDER BY frame_count DESC",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Image-related work is mixed rather than a uniform slowdown: ImageDecoder_nDecodeBitmap decreased from 27 calls totaling 37.729918 ms to 24 calls totaling 24.689539 ms, while Bitmap#prepareToDraw 63x63 remained at 210 calls and rose from 23.20842 ms to 26.952114 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT s.name, count(*) AS count, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread AS t ON t.utid = tt.utid\nJOIN process AS p ON p.upid = t.upid\nWHERE p.name = 'com.example.jetnews' AND (s.name = 'ImageDecoder_nDecodeBitmap' OR s.name = 'Bitmap#prepareToDraw 63x63' OR s.name = 'Atlas full')\nGROUP BY s.name ORDER BY s.name",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.name, count(*) AS count, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread AS t ON t.utid = tt.utid\nJOIN process AS p ON p.upid = t.upid\nWHERE p.name = 'com.example.jetnews' AND (s.name = 'ImageDecoder_nDecodeBitmap' OR s.name = 'Bitmap#prepareToDraw 63x63' OR s.name = 'Atlas full')\nGROUP BY s.name ORDER BY s.name",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The only range commit tied to this localized UI image path changes the Interests TopicItem thumbnail from 56.dp to 48.dp and adjusts the divider inset from 72.dp to 64.dp.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "77a061c0c715ba071167b2104fcebb2c2be12c8d",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "77a061c0c715ba071167b2104fcebb2c2be12c8d",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "Given the small p95 shift in a single capture per side and the mixed image-work results, the traces do not establish a performance regression or attribute one to a commit in the range.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT s.name, count(*) AS count, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread AS t ON t.utid = tt.utid\nJOIN process AS p ON p.upid = t.upid\nWHERE p.name = 'com.example.jetnews' AND (s.name = 'ImageDecoder_nDecodeBitmap' OR s.name = 'Bitmap#prepareToDraw 63x63' OR s.name = 'Atlas full')\nGROUP BY s.name ORDER BY s.name",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.name, count(*) AS count, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread AS t ON t.utid = tt.utid\nJOIN process AS p ON p.upid = t.upid\nWHERE p.name = 'com.example.jetnews' AND (s.name = 'ImageDecoder_nDecodeBitmap' OR s.name = 'Bitmap#prepareToDraw 63x63' OR s.name = 'Atlas full')\nGROUP BY s.name ORDER BY s.name",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "77a061c0c715ba071167b2104fcebb2c2be12c8d",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "77a061c0c715ba071167b2104fcebb2c2be12c8d",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Only one capture is available for each side, so the 0.344041 ms p95 difference may be run-to-run noise.",
+    "The current run is a debuggable debug build on an sdk_gphone64_arm64 emulator; baseline build metadata was not recorded."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "inconclusive",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 12,
+    "citations_passed": 12,
+    "wall_time_s": 4.076
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "c101689bc091efba2fcbae7f5a2e41e6c8c0108108e1851f12554a3492d593f1",
+      "current_sha256": "bd5765feeff82d9aa876f81b867c7c3395373f1b045e1ed3b0092ad3df1ad2f9",
+      "range": "598b2fa3fc9127cf36d9de4bcbb51ff4de4f951c..75ac1f34f73c512b2314e138de1cf6f8b8faa012"
+    },
+    "tool_calls": 60,
+    "usage": {
+      "input_tokens": 42,
+      "output_tokens": 17093,
+      "cache_read_input_tokens": 270546,
+      "cache_creation_input_tokens": 42480
+    },
+    "usd": 0.036551,
+    "wall_time_s": 202.031
+  }
+}

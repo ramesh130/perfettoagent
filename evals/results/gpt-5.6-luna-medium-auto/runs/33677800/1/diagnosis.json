@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "verdict": "inconclusive",
+  "metric": {
+    "name": "startup_ttid_ms",
+    "unit": "ms",
+    "baseline": 839.504417,
+    "current": 854.851167,
+    "delta": 15.346750000000043,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c2",
+      "text": "Each trace contains 20 cold starts with TTID data. The baseline TTID range was 801.601458\u20131006.860583 ms, while the current range was 818.441458\u2013895.549625 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT count(*) AS cold_starts, count(d.time_to_initial_display) AS with_ttid, min(d.time_to_initial_display)/1e6 AS min_ttid_ms, max(d.time_to_initial_display)/1e6 AS max_ttid_ms FROM android_startups s JOIN android_startup_time_to_display d USING (startup_id) WHERE s.package='com.example.jetnews' AND s.startup_type='cold';",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT count(*) AS cold_starts, count(d.time_to_initial_display) AS with_ttid, min(d.time_to_initial_display)/1e6 AS min_ttid_ms, max(d.time_to_initial_display)/1e6 AS max_ttid_ms FROM android_startups s JOIN android_startup_time_to_display d USING (startup_id) WHERE s.package='com.example.jetnews' AND s.startup_type='cold';",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The range contains a UI thumbnail-size change in InterestsScreen, but the trace evidence does not directly connect that change to the startup-TTID difference.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "cd4f22cbbddcc8efac9413ac2678b06e321492aa",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "cd4f22cbbddcc8efac9413ac2678b06e321492aa",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Only one baseline and one current capture are available, so the 15.346750000000043 ms shift may be run-to-run noise.",
+    "The current trace was captured on an Android emulator (sdk_gphone64_arm64, SDK 36) using a debuggable debug build.",
+    "No commit is attributed because no trace-localized startup code maps directly to a changed commit in the supplied range."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c1",
+      "text": "Median cold-start time to initial display increased from 839.504417 ms in the baseline trace to 854.851167 ms in the current trace, a delta of 15.346750000000043 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY count(*) ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 22 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause"
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY count(*) ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 100) AS value\n",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 22 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause"
+        }
+      ],
+      "reason": "citation 1: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 22 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause; citation 2: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 22 col 1\n    SELECT json_group_array(name) AS __perfettoagent_columns FROM pragma_table_info('__perfettoagent_query')\n    ^\naggregate functions are not allowed in the GROUP BY clause"
+    }
+  ],
+  "verification": {
+    "verdict_before": "inconclusive",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 5,
+    "citations_passed": 3,
+    "wall_time_s": 12.677
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "inputs": {
+      "baseline_sha256": "58f6e79fdc6541f98d047bef4ad95d2d62f8ab837486a5cd744f1b070a1257a9",
+      "current_sha256": "a90ad2b7002241fa3765ab086355ce11efc4c140c12b7a44e475682f514480cd",
+      "range": "20c3d5cf9b136abfcaa90ef97297c28501c31f4a..bb767eec9f98c0e9493140735e2e477828fcb9b1"
+    },
+    "tool_calls": 35,
+    "usage": {
+      "input_tokens": 27,
+      "output_tokens": 4845,
+      "cache_read_input_tokens": 84641,
+      "cache_creation_input_tokens": 17882
+    },
+    "usd": 0.011983,
+    "wall_time_s": 186.484
+  }
+}

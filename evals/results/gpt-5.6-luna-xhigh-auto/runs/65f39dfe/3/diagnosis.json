@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "verdict": "inconclusive",
+  "metric": {
+    "name": "frame_ui_time_p95_ms",
+    "unit": "ms",
+    "baseline": 32.532333,
+    "current": 35.181834,
+    "delta": 2.6495010000000008,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The selected app-UI metric increased from 32.532333 ms in baseline to 35.181834 ms in current, a delta of 2.649501 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "A range candidate overlaps this Feed UI path: commit 7fd3626107135436b97973da12915e1e13f76255 changes FeedScreen, and head blame assigns the FeedRow player-acquisition lines to that commit.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "7fd3626107135436b97973da12915e1e13f76255",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "7fd3626107135436b97973da12915e1e13f76255",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The trace does not directly identify that commit: it exposes generic Compose prefetch slices rather than a source-level FeedRow or method row, so the commit correlation is insufficient to distinguish a code regression from run-to-run variation.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid\n    FROM window_frames\n    WHERE upid = (SELECT upid FROM app)\n  )\nSELECT s.name, count(*) AS occurrences, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tr ON tr.id = s.track_id\nWHERE tr.utid IN (SELECT utid FROM main_thread)\n  AND s.name GLOB 'compose:lazy:prefetch*'\n  AND s.dur > 0\nGROUP BY s.name\nORDER BY total_ms DESC",
+          "row_count": 6,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "7fd3626107135436b97973da12915e1e13f76255",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "7fd3626107135436b97973da12915e1e13f76255",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Only one capture per side is available, so the 2.649501 ms p95 increase may be run-to-run noise.",
+    "The current metadata describes a non-debuggable benchmark build running on an sdk_gphone64_arm64 Android emulator; baseline build metadata was not available."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c2",
+      "text": "The extra work is concentrated on the app UI thread in Compose lazy-prefetch slices: compose-prefetch time rose from 358.572502 ms to 397.255297 ms, while idle-frame prefetch rose from 91.049293 ms to 126.968208 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid\n    FROM window_frames\n    WHERE upid = (SELECT upid FROM app)\n  )\nSELECT s.name, count(*) AS occurrences, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tr ON tr.id = s.track_id\nWHERE tr.utid IN (SELECT utid FROM main_thread)\n  AND s.name GLOB 'compose:lazy:prefetch*'\n  AND s.dur > 0\nGROUP BY s.name\nORDER BY total_ms DESC",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 11 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid\n    FROM window_frames\n    WHERE upid = (SELECT upid FROM app)\n  )\nSELECT s.name, count(*) AS occurrences, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tr ON tr.id = s.track_id\nWHERE tr.utid IN (SELECT utid FROM main_thread)\n  AND s.name GLOB 'compose:lazy:prefetch*'\n  AND s.dur > 0\nGROUP BY s.name\nORDER BY total_ms DESC",
+          "row_count": 6,
+          "error": null
+        }
+      ],
+      "reason": "citation 1: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 11 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+    }
+  ],
+  "verification": {
+    "verdict_before": "inconclusive",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 7,
+    "citations_passed": 6,
+    "wall_time_s": 1.982
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "118e8dc0a31000cebe5906815a5d05ab5d4800f6e10fa86d6a8ba12a16d0c679",
+      "current_sha256": "cd2ec0387ca952609cc24f410eb65375548dee094710a01f220763527e19d298",
+      "range": "21ec3d1199aaa3abc009d92e8c22775fe2f834e8..a5bc871eb640dbe4e548fa93da2fb34263b97abf"
+    },
+    "tool_calls": 76,
+    "usage": {
+      "input_tokens": 63,
+      "output_tokens": 21265,
+      "cache_read_input_tokens": 780154,
+      "cache_creation_input_tokens": 84206
+    },
+    "usd": 0.062185,
+    "wall_time_s": 293.331
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 399352,
+    "delta": -183,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects decreased from 399535 in the baseline heap graph to 399352 in the current heap graph, a delta of -183 objects; the checked metric therefore shows no regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT graph_sample_ts, SUM(reachable_obj_count) AS reachable_objects, COUNT(DISTINCT type_name) AS class_count\nFROM android_heap_graph_class_aggregation\nGROUP BY graph_sample_ts\nORDER BY graph_sample_ts",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT graph_sample_ts, SUM(reachable_obj_count) AS reachable_objects, COUNT(DISTINCT type_name) AS class_count\nFROM android_heap_graph_class_aggregation\nGROUP BY graph_sample_ts\nORDER BY graph_sample_ts",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The heap data is from the com.example.jetnews process in both captures, and the notable class-level changes are decreases in float[] objects from 641 to 534 and java.util.WeakHashMap$Entry objects from 275 to 201.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT h.ts, h.upid, p.name AS process_name, h.dump_reason, h.heap_size\nFROM heap_graph AS h\nLEFT JOIN process AS p USING (upid)\nORDER BY h.ts",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT h.ts, h.upid, p.name AS process_name, h.dump_reason, h.heap_size\nFROM heap_graph AS h\nLEFT JOIN process AS p USING (upid)\nORDER BY h.ts",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name AS class_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\nGROUP BY type_name\nHAVING type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nORDER BY class_name",
+          "row_count": 9,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name AS class_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\nGROUP BY type_name\nHAVING type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nORDER BY class_name",
+          "row_count": 9,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The range includes f94b545f7b3e7b45b51de9e14750c895ad5d402f, which changes the Interests-row thumbnail from 56.dp to 48.dp; git blame at the range head assigns the new .size(48.dp) line to that commit.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The trace localization names generic runtime and Compose heap classes rather than a class or method changed by f94b545f7b3e7b45b51de9e14750c895ad5d402f, so the range does not provide a defensible direct culprit for the small heap decrease.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name AS class_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\nGROUP BY type_name\nHAVING type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nORDER BY class_name",
+          "row_count": 9,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name AS class_name, SUM(reachable_obj_count) AS reachable_objects\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\nGROUP BY type_name\nHAVING type_name IN ('java.lang.Long[]', 'java.lang.Object[]', 'java.util.ArrayList', 'int[]', 'java.lang.ThreadLocal$ThreadLocalMap', 'java.lang.ThreadLocal$ThreadLocalMap$Entry[]', 'java.lang.ThreadLocal$ThreadLocalMap$Entry', 'java.util.WeakHashMap$Entry', 'float[]')\nORDER BY class_name",
+          "row_count": 9,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "There is only one capture per side; a 183-object difference is small and may be run-to-run heap-dump noise.",
+    "The available non-null comparison is reachable Java-object count; frame timing, binder, startup, GC, and native-heap metrics were unavailable in these captures."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 22.295
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "1bf19dfef39812c48e88fa555bb175d666c9802117b75a31a43102fa4a688e96",
+      "range": "62fbee606d77bd491d8bd8eb9d347f49df32d463..87e9f4098fc8e5f29e9bc309aa75db0ea7692e44"
+    },
+    "tool_calls": 51,
+    "usage": {
+      "input_tokens": 42,
+      "output_tokens": 12385,
+      "cache_read_input_tokens": 271639,
+      "cache_creation_input_tokens": 36203
+    },
+    "usd": 0.029354,
+    "wall_time_s": 242.689
+  }
+}

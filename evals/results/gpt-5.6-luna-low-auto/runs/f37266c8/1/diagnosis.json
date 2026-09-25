@@ -1,0 +1,103 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "binder_wait_ms",
+    "unit": "ms",
+    "baseline": 287.81833,
+    "current": 348.319381,
+    "delta": 60.50105100000002,
+    "sql_used": "INCLUDE PERFETTO MODULE android.binder;\nINCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_binder_txns) THEN NULL\n    ELSE coalesce((\n      SELECT sum(client_dur) FROM android_binder_txns\n      WHERE is_sync AND client_dur > 0\n        AND client_utid IN (SELECT ui_thread_utid FROM frames)\n    ), 0) / 1e6\n  END AS value\n"
+  },
+  "confidence": "medium",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Synchronous binder wait on the app's UI thread increased from 287.81833 ms in the baseline to 348.319381 ms in the current trace, a delta of 60.501051 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.binder;\nINCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_binder_txns) THEN NULL\n    ELSE coalesce((\n      SELECT sum(client_dur) FROM android_binder_txns\n      WHERE is_sync AND client_dur > 0\n        AND client_utid IN (SELECT ui_thread_utid FROM frames)\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.binder;\nINCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_binder_txns) THEN NULL\n    ELSE coalesce((\n      SELECT sum(client_dur) FROM android_binder_txns\n      WHERE is_sync AND client_dur > 0\n        AND client_utid IN (SELECT ui_thread_utid FROM frames)\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The increased UI-thread binder wait is concentrated in synchronous calls to SurfaceFlinger; the grouped trace query reports 371 calls and 277.81742 ms in the baseline, versus 400 calls and 348.318318 ms in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.binder;\nINCLUDE PERFETTO MODULE android.frames.timeline;\nWITH wf AS (SELECT DISTINCT f.ui_thread_utid FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0), b AS (SELECT * FROM android_binder_txns WHERE is_sync AND client_dur>0 AND client_utid IN (SELECT ui_thread_utid FROM wf)) SELECT server_process, server_thread, aidl_name, count(*) AS calls, sum(client_dur)/1e6 AS wait_ms FROM b GROUP BY server_process,server_thread,aidl_name ORDER BY wait_ms DESC LIMIT 20;",
+          "row_count": 5,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.binder;\nINCLUDE PERFETTO MODULE android.frames.timeline;\nWITH wf AS (SELECT DISTINCT f.ui_thread_utid FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0), b AS (SELECT * FROM android_binder_txns WHERE is_sync AND client_dur>0 AND client_utid IN (SELECT ui_thread_utid FROM wf)) SELECT server_process, server_thread, aidl_name, count(*) AS calls, sum(client_dur)/1e6 AS wait_ms FROM b GROUP BY server_process,server_thread,aidl_name ORDER BY wait_ms DESC LIMIT 20;",
+          "row_count": 5,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The range includes a FeedScreen change that rewrites player acquisition using takeIf, but the trace evidence only identifies SurfaceFlinger binder activity and does not connect that activity to this commit.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "328304f8f1081e484f20030bb6518b1b1ee03c82",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "328304f8f1081e484f20030bb6518b1b1ee03c82",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Each side is represented by a single capture, so the binder delta may be run-to-run variance.",
+    "The captures ran on an Android emulator (sdk_gphone64_arm64, SDK 36), which can add variability to SurfaceFlinger and binder timing.",
+    "The current build was a non-debuggable benchmark build; baseline build metadata was not available."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 5,
+    "citations_passed": 5,
+    "wall_time_s": 7.654
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "low",
+    "inputs": {
+      "baseline_sha256": "59988dd628aff40e0edba7fba5f45e4c3113395d343d3cb09e3cc46c6104454f",
+      "current_sha256": "36e283434b8d455f6feb11eaa41eaeb56f4e52ea34c3346dc6947ea4c8586e21",
+      "range": "724d8fb475fe1e5b708cdb6474f3d83b4311e4bc..f871266864fac1b4f44ff750e6a2fc5d5b07d4a1"
+    },
+    "tool_calls": 21,
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 3211,
+      "cache_read_input_tokens": 41904,
+      "cache_creation_input_tokens": 11382
+    },
+    "usd": 0.00754,
+    "wall_time_s": 73.399
+  }
+}

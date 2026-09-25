@@ -1,0 +1,25 @@
+{
+  "provider": "openai",
+  "model": "gpt-5.6-luna",
+  "effort": "high",
+  "metric": "expected",
+  "named_metric": "main_thread_blocked_ms",
+  "outcome": {
+    "case_id": "69dc18c7",
+    "run": 1,
+    "verdict": "regression",
+    "metric": "main_thread_blocked_ms",
+    "culprit": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+    "citations_checked": 9,
+    "citations_passed": 9,
+    "usd": 0.025768,
+    "wall_time_s": 110.59,
+    "usage": {
+      "input_tokens": 30,
+      "output_tokens": 10981,
+      "cache_read_input_tokens": 154876,
+      "cache_creation_input_tokens": 37949
+    },
+    "error": null
+  }
+}

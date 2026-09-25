@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "frame_ui_time_p95_ms",
+    "unit": "ms",
+    "baseline": 8.3585,
+    "current": 13.957625,
+    "delta": 5.599125000000001,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "9d695fef3c759e53d1bb01327b328a5d5e30bb87",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The app's UI-thread frame p95 increased from 8.3585 ms in the baseline to 13.957625 ms in the current trace, a 5.599125 ms regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT s.dur AS ns, row_number() OVER (ORDER BY s.dur) AS rank,\n      count(*) OVER () AS n\n    FROM android_frames_choreographer_do_frame AS d\n    JOIN slice AS s USING (id)\n    WHERE d.ui_thread_utid IN (SELECT ui_thread_utid FROM frames)\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The regression is localized to touch handling: AndroidOwner:onTouch took 754.221709 ms across 12 input events in the current trace, with a 125.045875 ms maximum, versus 21.103667 ms total and 3.013416 ms maximum in the baseline.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT child.name, count(*) AS occurrences, sum(child.dur)/1e6 AS total_ms, max(child.dur)/1e6 AS max_ms\nFROM slice parent JOIN slice child ON child.ts>=parent.ts AND child.ts+child.dur<=parent.ts+parent.dur\nWHERE parent.name='deliverInputEvent' AND child.id!=parent.id AND child.name='AndroidOwner:onTouch'\nGROUP BY child.name",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT child.name, count(*) AS occurrences, sum(child.dur)/1e6 AS total_ms, max(child.dur)/1e6 AS max_ms\nFROM slice parent JOIN slice child ON child.ts>=parent.ts AND child.ts+child.dur<=parent.ts+parent.dur\nWHERE parent.name='deliverInputEvent' AND child.id!=parent.id AND child.name='AndroidOwner:onTouch'\nGROUP BY child.name",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit 9d695fef3c759e53d1bb01327b328a5d5e30bb87 changed the bookmark button from a direct onToggleFavorite callback to a handler that calls onToggleFavorite and then Thread.sleep(BOOKMARK_HOLD_MS), with BOOKMARK_HOLD_MS set to 120 ms.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9d695fef3c759e53d1bb01327b328a5d5e30bb87",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9d695fef3c759e53d1bb01327b328a5d5e30bb87",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The changed handler and 120 ms hold constant are attributed to commit 9d695fef3c759e53d1bb01327b328a5d5e30bb87 by blame at the range head, matching the approximately 120 ms touch-handler durations in the current trace.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9d695fef3c759e53d1bb01327b328a5d5e30bb87",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9d695fef3c759e53d1bb01327b328a5d5e30bb87",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT child.name, count(*) AS occurrences, sum(child.dur)/1e6 AS total_ms, max(child.dur)/1e6 AS max_ms\nFROM slice parent JOIN slice child ON child.ts>=parent.ts AND child.ts+child.dur<=parent.ts+parent.dur\nWHERE parent.name='deliverInputEvent' AND child.id!=parent.id AND child.name='AndroidOwner:onTouch'\nGROUP BY child.name",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This diagnosis compares one capture per side, so absolute frame percentiles can contain run-to-run noise; the repeated approximately 120 ms touch-handler signature makes this change much larger and more specific than ordinary percentile noise.",
+    "The selected metric measures UI-thread doFrame time and does not by itself measure RenderThread or display-pipeline time."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 7,
+    "citations_passed": 7,
+    "wall_time_s": 0.814
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "e7121bd2bc5b2b50810fe8c87ae620609fd61f8215fc7d9bb0092757f68a4407",
+      "current_sha256": "78d1afec3beedd0ae32aa85c92eac4d0613c90432cc196ee7499cfc6868841f0",
+      "range": "04947aadfd0eaac2b226f8e7aa1c1cd838af22de..95386a052a896e62e6c9807b86ab65711b5f322d"
+    },
+    "tool_calls": 48,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 11490,
+      "cache_read_input_tokens": 270897,
+      "cache_creation_input_tokens": 44128
+    },
+    "usd": 0.030246,
+    "wall_time_s": 114.165
+  }
+}

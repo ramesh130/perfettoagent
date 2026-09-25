@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+    "files": [
+      "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The current trace has 434935 reachable Java objects versus 432751 in the baseline, an increase of 2184 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The increase is localized in pooled-player and feed-row-related objects: ForwardingPlayer$ForwardingListener grows from 17 to 165, ListenerSet$ListenerHolder from 50 to 198, and the FeedRow closure class from 4 to 152.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name AS type_name, COUNT(*) AS object_count, MIN(o.root_distance) AS min_root_distance, MAX(o.root_distance) AS max_root_distance\nFROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id\nWHERE o.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object)\n  AND o.reachable = 1\n  AND c.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.media3.common.util.ListenerSet$ListenerHolder','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1')\nGROUP BY c.name ORDER BY c.name",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS type_name, COUNT(*) AS object_count, MIN(o.root_distance) AS min_root_distance, MAX(o.root_distance) AS max_root_distance\nFROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id\nWHERE o.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object)\n  AND o.reachable = 1\n  AND c.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.media3.common.util.ListenerSet$ListenerHolder','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1')\nGROUP BY c.name ORDER BY c.name",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "In the current heap graph, ForwardingPlayer$ForwardingListener objects are retained through ListenerHolder.listener references and object-array references, matching accumulation of listener registrations rather than a broad class-wide increase.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS owner_type, r.field_name, r.deobfuscated_field_name, COUNT(*) AS refs\nFROM heap_graph_reference r\nJOIN heap_graph_object o ON o.id = r.owner_id\nJOIN heap_graph_class c ON c.id = o.type_id\nWHERE o.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object)\n  AND r.owned_id IN (SELECT o2.id FROM heap_graph_object o2 JOIN heap_graph_class c2 ON c2.id = o2.type_id WHERE o2.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object) AND c2.name = 'androidx.media3.common.ForwardingPlayer$ForwardingListener')\nGROUP BY c.name, r.field_name, r.deobfuscated_field_name ORDER BY refs DESC LIMIT 20",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Commit 6efb841e56d8071cddf03a32002d8413507b2797 removed the wrapped-listener removal and clear operations from SuperPlayer.resetForReuse; that change directly explains why recycled feed players can retain prior listeners and their feed-row closures.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name AS type_name, COUNT(*) AS object_count, MIN(o.root_distance) AS min_root_distance, MAX(o.root_distance) AS max_root_distance\nFROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id\nWHERE o.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object)\n  AND o.reachable = 1\n  AND c.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.media3.common.util.ListenerSet$ListenerHolder','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1')\nGROUP BY c.name ORDER BY c.name",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS type_name, COUNT(*) AS object_count, MIN(o.root_distance) AS min_root_distance, MAX(o.root_distance) AS max_root_distance\nFROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id\nWHERE o.graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM heap_graph_object)\n  AND o.reachable = 1\n  AND c.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.media3.common.util.ListenerSet$ListenerHolder','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1')\nGROUP BY c.name ORDER BY c.name",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Only one capture per side is available, so ordinary run-to-run heap-dump noise cannot be quantified.",
+    "The metric counts objects reachable in the final Java heap dump; it establishes retention in these captures but does not by itself prove how long the objects would remain reachable after a later lifecycle event or garbage collection."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 8,
+    "citations_passed": 8,
+    "wall_time_s": 4.053
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 37,
+    "usage": {
+      "input_tokens": 27,
+      "output_tokens": 7745,
+      "cache_read_input_tokens": 211294,
+      "cache_creation_input_tokens": 45116
+    },
+    "usd": 0.024804,
+    "wall_time_s": 111.144
+  }
+}
