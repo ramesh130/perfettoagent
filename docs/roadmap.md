@@ -165,10 +165,11 @@ the inputs. A rejected diagnosis is a candidate eval case. The trace hashes and 
 from `diagnosis.json`'s `run.inputs`, recorded by `diagnose`; `partial` names the kept
 claims that are right (ADR-0026).
 
-### 11. [ ] Write-up
+### 11. [~] Write-up ([#37](https://github.com/ramesh130/perfettoagent/issues/37))
 The README opens with the one-liner, a real diagnosis and the eval table. Add
 `docs/postmortem.md` covering what the agent got wrong and why. Record a two-minute
-walkthrough.
+walkthrough. The README and postmortem are written from `evals/results/`; the recording is
+still to do.
 
 ## Open questions
 
