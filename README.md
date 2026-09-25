@@ -6,6 +6,30 @@ how much, which commit caused it, and the trace rows that show it.**
 Every claim cites a trace query or a commit. A deterministic verifier re-runs each citation
 before anything is written, and drops any claim whose citation fails.
 
+## What it's for
+
+A perf alert fires: startup is slower, scrolling janks, memory keeps climbing. You have a trace
+from before and a trace from after, and a merge range of 5 to 50 commits in between. Finding
+the culprit by hand means switching between trace queries, `git log` and `git blame`, and it
+takes hours. perfettoagent runs that loop and hands back an answer where every claim can be
+checked.
+
+The kinds of regression it looks for, each with the metric that measures it:
+
+| Regression | What the user sees | Typical cause | Metric |
+|---|---|---|---|
+| Slow startup | The app takes longer to show its first or full frame | Disk or network I/O, or heavy setup, on the main thread in `Application.onCreate` or the first Activity | `startup_ttid_ms`, `startup_ttfd_ms` |
+| Jank from allocation churn | Scrolling stutters, and GC runs often | Objects allocated per frame in a draw or layout pass | `frame_ui_time_p95_ms`, `gc_time_ms` |
+| Main-thread blocking | Taps feel stuck; frames are dropped around input | `Thread.sleep`, lock waits or synchronous binder calls on the UI thread | `main_thread_blocked_ms`, `binder_wait_ms` |
+| Layout thrash | Scrolling janks while nothing visibly changes | Re-measuring or recomposing every visible item on every frame | `frame_ui_time_p95_ms`, `jank_frames_pct`, `frame_p95_ms`, `frame_p99_ms` |
+| Memory leaks | Heap keeps growing across repeated navigation | Listeners or callbacks registered and never removed | `heap_growth_objects_by_class`, `native_unfreed_bytes` |
+
+The answer names the metric and how far it moved, the commit that caused it, and the trace
+rows and commits that show it. When the evidence cannot attribute a change, it says so.
+
+It does not capture traces (devicelab or the `perfetto` CLI does), fix the code, or run on
+non-Android traces.
+
 ## A real diagnosis
 
 The start of [`diagnosis.md`](evals/results/gpt-5.6-luna-high-auto/runs/69dc18c7/1/diagnosis.md)
@@ -118,9 +142,6 @@ git lfs pull --include="evals/cases/**" --exclude=""
 uv run perfettoagent eval --effort high --jobs 3
 uv run python evals/summarize.py
 ```
-
-A walkthrough recording (trace in, diagnosis out) is still to come
-([#37](https://github.com/ramesh130/perfettoagent/issues/37)).
 
 ## Limits
 
