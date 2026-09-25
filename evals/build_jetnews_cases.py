@@ -5,7 +5,7 @@
 
 The second app's cases, built as `build_cases.py` builds superPlayer's (ADR-0015), and
 with its history code (`lay_out_history`, `unseen_edits`, `Repo`, `Edit`). This is the
-only code that reads jetnews-perf, a private repo, and it runs by hand, never from a
+only code that reads jetnews-perf (github.com/ramesh130/jetnews-perf), and it runs by hand, never from a
 test. What it writes is committed:
 
 - `evals/repos/jetnews.bundle`: the fixture repo, one branch per case.
