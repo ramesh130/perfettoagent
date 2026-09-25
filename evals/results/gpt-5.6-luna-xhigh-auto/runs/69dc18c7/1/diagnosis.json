@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "main_thread_blocked_ms",
+    "unit": "ms",
+    "baseline": 25.284169,
+    "current": 731.530503,
+    "delta": 706.2463339999999,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM frames\n  ),\n  work AS (\n    SELECT s.ts, s.dur\n    FROM slice AS s\n    JOIN thread_track AS t ON t.id = s.track_id\n    WHERE t.utid IN (SELECT utid FROM main_thread)\n      AND s.depth = 0 AND s.dur > 0\n      AND s.name NOT GLOB 'Choreographer#doFrame*'\n  ),\n  blocked AS (\n    SELECT ts, dur\n    FROM thread_state\n    WHERE utid IN (SELECT utid FROM main_thread)\n      AND dur > 0 AND state NOT IN ('Running', 'R', 'R+')\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (\n      SELECT 1 FROM thread_state WHERE utid IN (SELECT utid FROM main_thread)\n    ) THEN NULL\n    ELSE coalesce((\n      SELECT sum(min(b.ts + b.dur, w.ts + w.dur) - max(b.ts, w.ts))\n      FROM blocked AS b\n      JOIN work AS w ON b.ts < w.ts + w.dur AND w.ts < b.ts + b.dur\n    ), 0) / 1e6\n  END AS value\n"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+    "files": [
+      "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt"
+    ],
+    "attribution": "correlated"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Main-thread blocked time increased from 25.284169 ms in the baseline to 731.530503 ms in the current trace, a delta of 706.2463339999999 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM frames\n  ),\n  work AS (\n    SELECT s.ts, s.dur\n    FROM slice AS s\n    JOIN thread_track AS t ON t.id = s.track_id\n    WHERE t.utid IN (SELECT utid FROM main_thread)\n      AND s.depth = 0 AND s.dur > 0\n      AND s.name NOT GLOB 'Choreographer#doFrame*'\n  ),\n  blocked AS (\n    SELECT ts, dur\n    FROM thread_state\n    WHERE utid IN (SELECT utid FROM main_thread)\n      AND dur > 0 AND state NOT IN ('Running', 'R', 'R+')\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (\n      SELECT 1 FROM thread_state WHERE utid IN (SELECT utid FROM main_thread)\n    ) THEN NULL\n    ELSE coalesce((\n      SELECT sum(min(b.ts + b.dur, w.ts + w.dur) - max(b.ts, w.ts))\n      FROM blocked AS b\n      JOIN work AS w ON b.ts < w.ts + w.dur AND w.ts < b.ts + b.dur\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM frames\n  ),\n  work AS (\n    SELECT s.ts, s.dur\n    FROM slice AS s\n    JOIN thread_track AS t ON t.id = s.track_id\n    WHERE t.utid IN (SELECT utid FROM main_thread)\n      AND s.depth = 0 AND s.dur > 0\n      AND s.name NOT GLOB 'Choreographer#doFrame*'\n  ),\n  blocked AS (\n    SELECT ts, dur\n    FROM thread_state\n    WHERE utid IN (SELECT utid FROM main_thread)\n      AND dur > 0 AND state NOT IN ('Running', 'R', 'R+')\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (\n      SELECT 1 FROM thread_state WHERE utid IN (SELECT utid FROM main_thread)\n    ) THEN NULL\n    ELSE coalesce((\n      SELECT sum(min(b.ts + b.dur, w.ts + w.dur) - max(b.ts, w.ts))\n      FROM blocked AS b\n      JOIN work AS w ON b.ts < w.ts + w.dur AND w.ts < b.ts + b.dur\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The frame-selected app is com.superplayer.demo; its UI thread is utid 363 in baseline and utid 367 in current.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM window_frames\n  )\nSELECT p.upid, p.name AS process_name, t.utid, t.name AS thread_name,\n       (SELECT count(*) FROM window_frames) AS window_frame_count\nFROM process AS p\nJOIN thread AS t ON t.upid = p.upid\nWHERE p.upid = (SELECT upid FROM app)\n  AND t.utid IN (SELECT utid FROM main_thread)\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (\n    SELECT DISTINCT ui_thread_utid AS utid FROM window_frames\n  )\nSELECT p.upid, p.name AS process_name, t.utid, t.name AS thread_name,\n       (SELECT count(*) FROM window_frames) AS window_frame_count\nFROM process AS p\nJOIN thread AS t ON t.upid = p.upid\nWHERE p.upid = (SELECT upid FROM app)\n  AND t.utid IN (SELECT utid FROM main_thread)\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "On that UI thread, AndroidOwner:onTouch grew from 367 slices totaling 148.281792 ms, with a 5.569625 ms maximum, to 387 slices totaling 917.909462 ms, with a 122.276042 ms maximum.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (SELECT DISTINCT ui_thread_utid AS utid FROM window_frames)\nSELECT count(*) AS touch_slices, sum(s.dur)/1e6 AS total_touch_ms,\n       max(s.dur)/1e6 AS max_touch_ms\nFROM slice s JOIN thread_track t ON t.id=s.track_id\nWHERE t.utid IN (SELECT utid FROM main_thread)\n  AND s.name='AndroidOwner:onTouch' AND s.dur > 0\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (SELECT DISTINCT ui_thread_utid AS utid FROM window_frames)\nSELECT count(*) AS touch_slices, sum(s.dur)/1e6 AS total_touch_ms,\n       max(s.dur)/1e6 AS max_touch_ms\nFROM slice s JOIN thread_track t ON t.id=s.track_id\nWHERE t.utid IN (SELECT utid FROM main_thread)\n  AND s.name='AndroidOwner:onTouch' AND s.dur > 0\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The current trace contains six deliverInputEvent slices longer than 100 ms, totaling 727.312415 ms and ranging from 120.548 ms to 122.348666 ms; the baseline contains none.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (SELECT DISTINCT ui_thread_utid AS utid FROM window_frames)\nSELECT count(*) AS long_touch_events,\n       sum(s.dur)/1e6 AS total_long_touch_ms,\n       min(s.dur)/1e6 AS shortest_long_touch_ms,\n       max(s.dur)/1e6 AS longest_long_touch_ms\nFROM slice s JOIN thread_track t ON t.id=s.track_id\nWHERE t.utid IN (SELECT utid FROM main_thread)\n  AND s.name GLOB 'deliverInputEvent*' AND s.dur > 100000000\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (SELECT DISTINCT ui_thread_utid AS utid FROM window_frames)\nSELECT count(*) AS long_touch_events,\n       sum(s.dur)/1e6 AS total_long_touch_ms,\n       min(s.dur)/1e6 AS shortest_long_touch_ms,\n       max(s.dur)/1e6 AS longest_long_touch_ms\nFROM slice s JOIN thread_track t ON t.id=s.track_id\nWHERE t.utid IN (SELECT utid FROM main_thread)\n  AND s.name GLOB 'deliverInputEvent*' AND s.dur > 100000000\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "Commit c70fd55eea9930f42380069d9b1f0a3f22bc403b adds Thread.sleep(TAP_HOLD_MS) to FeedScreen.kt's onFeedTapped handler and defines TAP_HOLD_MS as 120L; the new 120 ms hold matches the repeated 120.548\u2013122.348666 ms touch events in the current trace. Head blame assigns those added lines to c70.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "c70fd55eea9930f42380069d9b1f0a3f22bc403b",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  main_thread AS (SELECT DISTINCT ui_thread_utid AS utid FROM window_frames)\nSELECT count(*) AS long_touch_events,\n       sum(s.dur)/1e6 AS total_long_touch_ms,\n       min(s.dur)/1e6 AS shortest_long_touch_ms,\n       max(s.dur)/1e6 AS longest_long_touch_ms\nFROM slice s JOIN thread_track t ON t.id=s.track_id\nWHERE t.utid IN (SELECT utid FROM main_thread)\n  AND s.name GLOB 'deliverInputEvent*' AND s.dur > 100000000\n",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Each side is a single capture, so ordinary run-to-run noise cannot be ruled out; this is not a small-delta case because the current trace has repeated roughly 120 ms touch stalls.",
+    "The current run metadata describes a non-debuggable benchmark build on the sdk_gphone64_arm64 emulator; baseline build metadata was not recorded.",
+    "No stack-profile samples were available, so the source attribution is timing/code correlation rather than a symbolized application stack."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 11.69
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "b99b711767a5773e604e8c16b300bc638c7cba6903ded19fd3f12b0bb27f0442",
+      "current_sha256": "7a1e21ea7f5088a554e86b43216674534dc6a59176251dfabe4e21690639559b",
+      "range": "dae3767d00fae05a8095eb6676185f8e758d7507..36bbe32683f70ecc17070a3be23c6c33007881d7"
+    },
+    "tool_calls": 52,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 18654,
+      "cache_read_input_tokens": 332952,
+      "cache_creation_input_tokens": 43250
+    },
+    "usd": 0.039864,
+    "wall_time_s": 256.6
+  }
+}

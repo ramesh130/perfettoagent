@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 399352,
+    "delta": -183,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects decreased by 183 from baseline to current, so the measured heap metric did not regress.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The class breakdown does not show a growth pattern suggesting a leak: java.util.WeakHashMap$Entry decreased by 74 objects and float[] decreased by 107 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'java.util.WeakHashMap$Entry' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'java.util.WeakHashMap$Entry'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'java.util.WeakHashMap$Entry' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'java.util.WeakHashMap$Entry'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'float[]' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'float[]'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'float[]' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'float[]'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The range contains UI/layout changes, including smaller Interests thumbnails and a one-dp dialog-button padding change, but the trace evidence does not identify either change as a cause of a regression.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "f94b545f7b3e7b45b51de9e14750c895ad5d402f",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "87e9f4098fc8e5f29e9bc309aa75db0ea7692e44",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "87e9f4098fc8e5f29e9bc309aa75db0ea7692e44",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This conclusion is based on one capture per side; the 183-object difference may be within run-to-run variation.",
+    "The traces were captured on an Android emulator using a debuggable build.",
+    "Frame-time, startup, binder, GC, and native-heap metrics had no usable data in these traces, so this diagnosis is limited to the Java heap-graph metric."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 8,
+    "citations_passed": 8,
+    "wall_time_s": 0.34
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "1bf19dfef39812c48e88fa555bb175d666c9802117b75a31a43102fa4a688e96",
+      "range": "62fbee606d77bd491d8bd8eb9d347f49df32d463..87e9f4098fc8e5f29e9bc309aa75db0ea7692e44"
+    },
+    "tool_calls": 27,
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 3342,
+      "cache_read_input_tokens": 43115,
+      "cache_creation_input_tokens": 15227
+    },
+    "usd": 0.008683,
+    "wall_time_s": 110.517
+  }
+}

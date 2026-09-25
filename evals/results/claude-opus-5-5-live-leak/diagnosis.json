@@ -1,0 +1,151 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+    "files": [
+      "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The last Java heap dump holds 432751 reachable objects in the baseline and 434935 in the current trace, 2184 more.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "Listener-wrapper classes grow by the same count, which points to a leak. androidx.media3.common.ForwardingPlayer$ForwardingListener goes from 17 to 165. $Proxy3 goes from 16 to 164. SuperPlayerKt's lambda goes from 16 to 164. The demo feed's FeedScreenKt$FeedRow$1$1$1$1 listener goes from 4 to 152. Each class gains 148 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'androidx.media3.common.ForwardingPlayer$ForwardingListener' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'androidx.media3.common.ForwardingPlayer$ForwardingListener'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'androidx.media3.common.ForwardingPlayer$ForwardingListener' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'androidx.media3.common.ForwardingPlayer$ForwardingListener'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT '$Proxy3' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS '$Proxy3'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit 6efb841 ('Trim resetForReuse') deletes the block in SuperPlayer.resetForReuse that removed every wrapped listener from the delegate and cleared wrappedListeners. After it, a pooled player keeps each listener wrapper, and the feed-row listener it holds, attached across every reuse. SuperPlayer.addListener wraps each listener with reportingSourceAs, which returns a Proxy.newProxyInstance wrapper. That matches the growth in $Proxy3 and in the SuperPlayerKt lambda.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The other commits in the range touch comments, names, test-kit files or gradle.properties. None of their subjects suggests a change to how listeners are kept.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "04beebdcfc014c9fab76c29a49d3ca876648ce6d",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "04beebdcfc014c9fab76c29a49d3ca876648ce6d",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "b9bddca8037da62758505129fdbe9458be24e5c5",
+          "path": "gradle.properties",
+          "commit": "b9bddca8037da62758505129fdbe9458be24e5c5",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "There is one capture per side, on an emulator (sdk_gphone64_arm64, SDK 36). The headline delta is small, about 0.5% of reachable objects. The evidence rests on the matching +148 growth in the listener-wrapper classes rather than on the total.",
+    "The current build is from a49a1eb and is not debuggable (benchmark build type). The baseline trace's build is not recorded.",
+    "git_blame cannot show deleted lines. The attribution rests on 6efb841's diff, which removed the listener cleanup from resetForReuse. At the head, lines 523-555 of resetForReuse no longer mention wrappedListeners.",
+    "I did not read the diffs of the other SuperPlayer.kt commits (a49a1eb, cc662f9, befc18d, 04beebd, 7db8614, 0b24d41). Ruling them out rests on their commit subjects."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 11.431
+  },
+  "run": {
+    "provider": "anthropic",
+    "model": "claude-opus-5-5",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 8,
+    "usage": {
+      "input_tokens": 105431,
+      "output_tokens": 4565,
+      "cache_read_input_tokens": 29230,
+      "cache_creation_input_tokens": 5846
+    },
+    "usd": 0.5481,
+    "wall_time_s": 95.64
+  }
+}

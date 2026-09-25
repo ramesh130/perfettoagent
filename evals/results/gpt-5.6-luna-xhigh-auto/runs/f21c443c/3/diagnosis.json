@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "gc_time_ms",
+    "unit": "ms",
+    "baseline": 258.575876,
+    "current": 10356.094546,
+    "delta": 10097.51867,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_garbage_collection_events) THEN NULL\n    ELSE coalesce((\n      SELECT sum(gc_dur) FROM android_garbage_collection_events\n      WHERE upid = (SELECT upid FROM app)\n    ), 0) / 1e6\n  END AS value\n"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "60be8b69bd6967b234ecb466b5cd1312df2c9854",
+    "files": [
+      "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt"
+    ],
+    "attribution": "correlated"
+  },
+  "claims": [
+    {
+      "id": "c2",
+      "text": "The increase is isolated to com.superplayer.demo: it went from 7 collections totaling 258.575876 ms to 149 collections totaling 10356.094546 ms; the current run reclaimed 5422.02 MB.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.garbage_collection;\nSELECT process_name, gc_type, count(*) AS gc_count, sum(gc_dur) / 1e6 AS gc_ms, sum(reclaimed_mb) AS reclaimed_mb\nFROM android_garbage_collection_events\nWHERE process_name = 'com.superplayer.demo'\nGROUP BY process_name, gc_type ORDER BY gc_count DESC",
+          "row_count": 2,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.garbage_collection;\nSELECT process_name, gc_type, count(*) AS gc_count, sum(gc_dur) / 1e6 AS gc_ms, sum(reclaimed_mb) AS reclaimed_mb\nFROM android_garbage_collection_events\nWHERE process_name = 'com.superplayer.demo'\nGROUP BY process_name, gc_type ORDER BY gc_count DESC",
+          "row_count": 2,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The affected trace area is the app's UI drawing path: current AndroidOwner:draw totaled 6800.699007 ms across 427 slices and Record View#draw() totaled 7167.757708 ms, versus 249.954786 ms across 676 slices and 815.651371 ms across 701 slices in the baseline.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT s.name, count(*) AS slice_count, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread AS t ON t.utid = tt.utid\nJOIN process AS p ON p.upid = t.upid\nWHERE p.name = 'com.superplayer.demo'\n  AND s.name IN ('drainAndFeed', 'draw-VRI[MainActivity]', 'Record View#draw()', 'AndroidOwner:draw')\nGROUP BY s.name ORDER BY total_ms DESC",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.name, count(*) AS slice_count, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread AS t ON t.utid = tt.utid\nJOIN process AS p ON p.upid = t.upid\nWHERE p.name = 'com.superplayer.demo'\n  AND s.name IN ('drainAndFeed', 'draw-VRI[MainActivity]', 'Record View#draw()', 'AndroidOwner:draw')\nGROUP BY s.name ORDER BY total_ms DESC",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "60be8b69bd6967b234ecb466b5cd1312df2c9854 is the likely culprit: it changed FeedScreen.kt to add a scrolling grain overlay that allocates List(GRAIN_SPECKS) inside the drawing callback. That allocation pattern matches the current trace's large increase in app GC and UI-draw work.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "60be8b69bd6967b234ecb466b5cd1312df2c9854",
+          "path": "demo/src/main/kotlin/com/superplayer/demo/FeedScreen.kt",
+          "commit": "60be8b69bd6967b234ecb466b5cd1312df2c9854",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.garbage_collection;\nSELECT process_name, gc_type, count(*) AS gc_count, sum(gc_dur) / 1e6 AS gc_ms, sum(reclaimed_mb) AS reclaimed_mb\nFROM android_garbage_collection_events\nWHERE process_name = 'com.superplayer.demo'\nGROUP BY process_name, gc_type ORDER BY gc_count DESC",
+          "row_count": 2,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.name, count(*) AS slice_count, sum(s.dur) / 1e6 AS total_ms, max(s.dur) / 1e6 AS max_ms\nFROM slice AS s\nJOIN thread_track AS tt ON tt.id = s.track_id\nJOIN thread AS t ON t.utid = tt.utid\nJOIN process AS p ON p.upid = t.upid\nWHERE p.name = 'com.superplayer.demo'\n  AND s.name IN ('drainAndFeed', 'draw-VRI[MainActivity]', 'Record View#draw()', 'AndroidOwner:draw')\nGROUP BY s.name ORDER BY total_ms DESC",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "Only one capture was available per side, so smaller frame-level differences may contain run-to-run noise; this GC increase is large relative to that risk.",
+    "The current capture is from a non-debuggable benchmark build on the sdk_gphone64_arm64 emulator.",
+    "GC time measures collector work, not direct main-thread pause time; the source attribution is correlated because the trace exposes framework draw/GC slices rather than an app source stack for the allocation."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c1",
+      "text": "App garbage-collection time increased from 258.575876 ms in the baseline to 10356.094546 ms in the current trace, a 10097.51867 ms increase.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_garbage_collection_events) THEN NULL\n    ELSE coalesce((\n      SELECT sum(gc_dur) FROM android_garbage_collection_events\n      WHERE upid = (SELECT upid FROM app)\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_garbage_collection_events) THEN NULL\n    ELSE coalesce((\n      SELECT sum(gc_dur) FROM android_garbage_collection_events\n      WHERE upid = (SELECT upid FROM app)\n    ), 0) / 1e6\n  END AS value\n",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 12 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+        }
+      ],
+      "reason": "citation 2: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 12 col 54\n        SELECT upid FROM window_frames GROUP BY count(*) DESC, upid LIMIT 1\n                                                         ^\nsyntax error near 'DESC'"
+    }
+  ],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 9,
+    "citations_passed": 8,
+    "wall_time_s": 8.252
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "b99b711767a5773e604e8c16b300bc638c7cba6903ded19fd3f12b0bb27f0442",
+      "current_sha256": "8e20ddb96e44682d8a730e2b991fa504fc0a8e0da513a73d2df253b643cb0f2b",
+      "range": "e04971dd196013a927626bad25aef60066343533..9d89ce1ec3503aadda240ce37feb754b809eeb38"
+    },
+    "tool_calls": 63,
+    "usage": {
+      "input_tokens": 51,
+      "output_tokens": 15295,
+      "cache_read_input_tokens": 339476,
+      "cache_creation_input_tokens": 41121
+    },
+    "usd": 0.035434,
+    "wall_time_s": 275.777
+  }
+}

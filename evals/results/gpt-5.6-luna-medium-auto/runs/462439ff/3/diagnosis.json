@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": null,
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 432751 to 434935, a growth of 2184 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The growth is concentrated in listener and wrapper-related objects: ListenerHolder increased from 50 to 198, ForwardingPlayer$ForwardingListener from 17 to 165, SuperPlayerKt$$ExternalSyntheticLambda0 from 16 to 164, and Compose SnapshotMutableState records from 345 to 635.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS objects FROM android_heap_graph_class_aggregation WHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation) AND (type_name GLOB '*Feed*' OR type_name GLOB '*SuperPlayer*' OR type_name GLOB '*SnapshotMutableState*' OR type_name GLOB '*Listener*' OR type_name GLOB '*FlagSet*') GROUP BY type_name ORDER BY objects DESC",
+          "row_count": 1441,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS objects FROM android_heap_graph_class_aggregation WHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation) AND (type_name GLOB '*Feed*' OR type_name GLOB '*SuperPlayer*' OR type_name GLOB '*SnapshotMutableState*' OR type_name GLOB '*Listener*' OR type_name GLOB '*FlagSet*') GROUP BY type_name ORDER BY objects DESC",
+          "row_count": 1439,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "This conclusion is based on one heap graph capture per side; reachable-object counts can vary with scenario timing.",
+    "The current run is a non-debuggable benchmark build on an Android emulator (sdk_gphone64_arm64, SDK 36).",
+    "Heap growth establishes increased retained reachable objects, but does not independently prove process lifetime or user-visible memory pressure."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c3",
+      "text": "Commit 6efb841e56d8071cddf03a32002d8413507b2797 removed the wrapped-listener cleanup from SuperPlayer.resetForReuse, while the same file still uses wrapped listener objects for delegate registration; this directly matches the current listener-wrapper growth.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "ccdf1f9446d2a45d8e6dc396601f528951434322",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "ccdf1f9446d2a45d8e6dc396601f528951434322",
+          "error": "ccdf1f9446d2a45d8e6dc396601f528951434322 is not inside the range"
+        }
+      ],
+      "reason": "citation 2: ccdf1f9446d2a45d8e6dc396601f528951434322 is not inside the range"
+    }
+  ],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": "no surviving claim cites the culprit commit 6efb841e56d8071cddf03a32002d8413507b2797",
+    "metric_dropped": null,
+    "citations_checked": 6,
+    "citations_passed": 5,
+    "wall_time_s": 10.126
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 27,
+    "usage": {
+      "input_tokens": 24,
+      "output_tokens": 3188,
+      "cache_read_input_tokens": 104501,
+      "cache_creation_input_tokens": 31078
+    },
+    "usd": 0.01369,
+    "wall_time_s": 122.927
+  }
+}

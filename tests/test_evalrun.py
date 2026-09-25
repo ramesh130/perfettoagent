@@ -7,6 +7,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import httpx2
+import openai
 import pytest
 
 from perfettoagent import cli, evalrun
@@ -265,3 +267,41 @@ _SCORES = {
 def test_the_cli_rejects_zero_runs(capsys):
     assert main(["eval", "--runs", "0"]) == 2
     assert "at least 1" in capsys.readouterr().err
+
+
+class Unserved(FakeDiagnose):
+    """Refused by the provider on its first call: an exhausted quota, as OpenAI
+    streams it."""
+
+    def __call__(self, **kwargs) -> dict:
+        self.calls.append(kwargs)
+        request = httpx2.Request("POST", "https://api.openai.com/v1/responses")
+        raise openai.APIError(
+            "You have no credits remaining.",
+            request,
+            body={"code": "insufficient_quota"},
+        )
+
+
+def test_a_run_the_provider_will_not_serve_stops_the_eval_unrecorded(
+    root, culprit, tmp_path
+):
+    out = tmp_path / "out"
+    with pytest.raises(evalrun.ProviderUnavailable, match="no credits remaining"):
+        run(root, out, Unserved(root, culprit), runs=1, cases=[CLEAN])
+    assert not (out / "runs" / CLEAN / "1" / "result.json").exists()
+    # Resumed once the provider serves: the run is made, not skipped.
+    fake = FakeDiagnose(root, culprit)
+    run(root, out, fake, runs=1, cases=[CLEAN])
+    assert len(fake.calls) == 1
+
+
+def test_the_cli_says_how_to_resume_when_the_provider_will_not_serve(
+    monkeypatch, capsys
+):
+    def refuse(out, **kwargs):
+        raise evalrun.ProviderUnavailable("x run 1: the provider would not serve it")
+
+    monkeypatch.setattr(cli, "run_eval", refuse)
+    assert main(["eval", "--runs", "1"]) == 1
+    assert "would not serve" in capsys.readouterr().err

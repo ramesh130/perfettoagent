@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+    "files": [
+      "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable heap objects increased from 432751 to 434935, a delta of 2184 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The increase is concentrated in listener-related and UI-retaining classes: ListenerHolder rose from 50 to 198, ForwardingListener from 17 to 165, SuperPlayerKt$$ExternalSyntheticLambda0 from 16 to 164, and FeedRow composition objects from 4 to 152.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_obj_count\nFROM android_heap_graph_class_aggregation\nWHERE type_name IN ('androidx.media3.common.util.ListenerSet$ListenerHolder','androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_obj_count\nFROM android_heap_graph_class_aggregation\nWHERE type_name IN ('androidx.media3.common.util.ListenerSet$ListenerHolder','androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit 6efb841e56d8071cddf03a32002d8413507b2797 removed the wrapped-listener removal and map-clearing block from SuperPlayer.resetForReuse; this directly matches the listener-retention pattern in the current heap.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_obj_count\nFROM android_heap_graph_class_aggregation\nWHERE type_name IN ('androidx.media3.common.util.ListenerSet$ListenerHolder','androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1')\nGROUP BY type_name\nORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "This diagnosis uses one heap snapshot per trace; repeated captures would be needed to distinguish the 2184-object increase from run-to-run variation.",
+    "The traces do not contain frame-timeline, startup, binder, GC, or native-heapprofd data, so those performance dimensions could not be evaluated."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 6,
+    "citations_passed": 6,
+    "wall_time_s": 12.174
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 26,
+    "usage": {
+      "input_tokens": 21,
+      "output_tokens": 3060,
+      "cache_read_input_tokens": 87835,
+      "cache_creation_input_tokens": 28333
+    },
+    "usd": 0.012516,
+    "wall_time_s": 116.156
+  }
+}

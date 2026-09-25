@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 401322,
+    "delta": 1787,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/PostsRepository.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 399535 in the baseline trace to 401322 in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The increase is concentrated in Compose state and PostCards-generated listener objects: SnapshotMutableStateImpl$StateStateRecord is 1027 versus 1747, while PostCardsKt$$ExternalSyntheticLambda2 is 30 versus 360 between baseline and current.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects FROM android_heap_graph_class_aggregation WHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation) AND type_name IN ('androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','androidx.compose.runtime.ParcelableSnapshotMutableState','androidx.compose.runtime.internal.AtomicInt','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda6','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda9') GROUP BY type_name ORDER BY reachable_objects DESC",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS reachable_objects FROM android_heap_graph_class_aggregation WHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation) AND type_name IN ('androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','androidx.compose.runtime.ParcelableSnapshotMutableState','androidx.compose.runtime.internal.AtomicInt','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda6','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda9') GROUP BY type_name ORDER BY reachable_objects DESC",
+          "row_count": 6,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "In the current heap, FakePostsRepository has a favoritesListeners ArrayList, and that list retains 360 PostCardsKt$$ExternalSyntheticLambda2 listener objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH latest AS (SELECT MAX(graph_sample_ts) AS ts FROM heap_graph_object), repo AS (SELECT o.id FROM heap_graph_object o JOIN latest l ON o.graph_sample_ts=l.ts JOIN heap_graph_class c ON c.id=o.type_id WHERE COALESCE(c.deobfuscated_name,c.name)='com.example.jetnews.data.posts.impl.FakePostsRepository'), listeners AS (SELECT r.owned_id AS list_id FROM heap_graph_reference r JOIN repo ON r.owner_id=repo.id WHERE r.field_name='com.example.jetnews.data.posts.impl.FakePostsRepository.favoritesListeners'), arrays AS (SELECT r.owned_id AS array_id FROM heap_graph_reference r JOIN listeners l ON r.owner_id=l.list_id WHERE r.field_name='java.util.ArrayList.elementData') SELECT COUNT(DISTINCT r.owned_id) AS retained_listener_lambdas FROM heap_graph_reference r JOIN arrays a ON r.owner_id=a.array_id JOIN heap_graph_object o ON o.id=r.owned_id JOIN heap_graph_class c ON c.id=o.type_id WHERE COALESCE(c.deobfuscated_name,c.name)='com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH latest AS (SELECT MAX(graph_sample_ts) AS ts FROM heap_graph_object), repo AS (SELECT o.id,o.reference_set_id FROM heap_graph_object o JOIN heap_graph_class c ON c.id=o.type_id JOIN latest l ON o.graph_sample_ts=l.ts WHERE COALESCE(c.deobfuscated_name,c.name)='com.example.jetnews.data.posts.impl.FakePostsRepository') SELECT repo.id, r.owned_id, r.field_name, r.field_type_name, COALESCE(c.deobfuscated_name,c.name) AS owned_type FROM repo JOIN heap_graph_reference r ON r.reference_set_id=repo.reference_set_id LEFT JOIN heap_graph_object o ON o.id=r.owned_id LEFT JOIN heap_graph_class c ON c.id=o.type_id ORDER BY r.field_name",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The baseline contains 30 PostCardsKt$$ExternalSyntheticLambda2 objects, compared with 360 in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT COALESCE(c.deobfuscated_name,c.name) AS type_name, COUNT(*) AS objects FROM heap_graph_object o JOIN heap_graph_class c ON c.id=o.type_id WHERE o.graph_sample_ts=(SELECT MAX(graph_sample_ts) FROM heap_graph_object) AND COALESCE(c.deobfuscated_name,c.name)='com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2' GROUP BY type_name",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT COALESCE(c.deobfuscated_name,c.name) AS type_name, COUNT(*) AS objects FROM heap_graph_object o JOIN heap_graph_class c ON c.id=o.type_id WHERE o.graph_sample_ts=(SELECT MAX(graph_sample_ts) FROM heap_graph_object) AND COALESCE(c.deobfuscated_name,c.name)='com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2' GROUP BY type_name",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "Commit 9facdf1 adds the per-card bookmark state and direct favorites listener registration in PostCards.kt, plus the favoritesListeners storage and registration API in the repository implementations; the changed code directly matches the retained classes in the current heap.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/PostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH latest AS (SELECT MAX(graph_sample_ts) AS ts FROM heap_graph_object), repo AS (SELECT o.id FROM heap_graph_object o JOIN latest l ON o.graph_sample_ts=l.ts JOIN heap_graph_class c ON c.id=o.type_id WHERE COALESCE(c.deobfuscated_name,c.name)='com.example.jetnews.data.posts.impl.FakePostsRepository'), listeners AS (SELECT r.owned_id AS list_id FROM heap_graph_reference r JOIN repo ON r.owner_id=repo.id WHERE r.field_name='com.example.jetnews.data.posts.impl.FakePostsRepository.favoritesListeners'), arrays AS (SELECT r.owned_id AS array_id FROM heap_graph_reference r JOIN listeners l ON r.owner_id=l.list_id WHERE r.field_name='java.util.ArrayList.elementData') SELECT COUNT(DISTINCT r.owned_id) AS retained_listener_lambdas FROM heap_graph_reference r JOIN arrays a ON r.owner_id=a.array_id JOIN heap_graph_object o ON o.id=r.owned_id JOIN heap_graph_class c ON c.id=o.type_id WHERE COALESCE(c.deobfuscated_name,c.name)='com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Only one capture per side is available, so small whole-heap differences can contain run-to-run noise.",
+    "The current run is a debuggable build captured on an emulator; the metric counts reachable objects in the last Java heap dump, not allocation rate or object size."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 13,
+    "citations_passed": 13,
+    "wall_time_s": 12.598
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "a9f10f6f0f8cd6006c0b9a82187cf893b6e0f45bd7c8acfb24c9961399956a18",
+      "range": "2f8ab7c6f562b5a61ed028d1ba8e0ec6f2baa7df..84928ff8488faca0865dcd17906867071711f8d8"
+    },
+    "tool_calls": 40,
+    "usage": {
+      "input_tokens": 42,
+      "output_tokens": 11284,
+      "cache_read_input_tokens": 302807,
+      "cache_creation_input_tokens": 44839
+    },
+    "usd": 0.030815,
+    "wall_time_s": 207.739
+  }
+}

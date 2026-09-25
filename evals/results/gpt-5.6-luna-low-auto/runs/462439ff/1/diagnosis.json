@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+    "files": [
+      "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable heap objects increased from 432751 in the baseline to 434935 in the current trace, a delta of 2184 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit 6efb841e removed the synchronized cleanup that removed and cleared wrapped listeners inside resetForReuse, directly matching the observed growth in listener-related objects.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "This is a single capture per side, so the magnitude should be confirmed with repeated runs.",
+    "The heap metric reports reachable objects from heap-graph snapshots; it does not by itself prove that every additional object is permanently leaked."
+  ],
+  "dropped_claims": [
+    {
+      "id": "c2",
+      "text": "The largest identified growth included 148 additional com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0 objects and 148 additional androidx.media3.common.ForwardingPlayer$ForwardingListener objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n) WHERE key IS 'com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0'), 0) AS value",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT 'com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0' AS key, coalesce((SELECT value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n)\n) AS value",
+          "row_count": null,
+          "error": "did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 8 col 3\n    ) AS value\n      ^\nsyntax error near 'AS'"
+        }
+      ],
+      "reason": "citation 2: did not run: trace processor failed:\nTraceback (most recent call last):\n  File \"stdin\" line 8 col 3\n    ) AS value\n      ^\nsyntax error near 'AS'"
+    }
+  ],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 5,
+    "citations_passed": 4,
+    "wall_time_s": 9.136
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "low",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 23,
+    "usage": {
+      "input_tokens": 21,
+      "output_tokens": 2050,
+      "cache_read_input_tokens": 72648,
+      "cache_creation_input_tokens": 19688
+    },
+    "usd": 0.008839,
+    "wall_time_s": 104.388
+  }
+}

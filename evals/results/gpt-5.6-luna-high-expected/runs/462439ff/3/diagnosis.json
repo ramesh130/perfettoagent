@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+    "files": [
+      "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 432751 in the baseline heap dump to 434935 in the current dump, a delta of 2184 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The increase includes substantial growth in listener-related and feed-row objects: ListenerSet$ListenerHolder grew from 50 to 198, ForwardingPlayer$ForwardingListener from 17 to 165, the SuperPlayer synthetic listener lambda from 16 to 164, and the FeedRow closure from 4 to 152.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "WITH target AS (SELECT id, name FROM heap_graph_class WHERE name IN ('com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1','com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','androidx.media3.common.util.ListenerSet$ListenerHolder','androidx.media3.common.ForwardingPlayer$ForwardingListener')) SELECT c.name, c.id AS type_id, COUNT(o.id) AS objects, SUM(CASE WHEN o.reachable = 1 THEN 1 ELSE 0 END) AS reachable, MIN(o.root_distance) AS min_root_distance, COUNT(DISTINCT o.root_type) AS root_types FROM target c LEFT JOIN heap_graph_object o ON o.type_id = c.id AND o.graph_sample_ts = (SELECT MAX(ts) FROM heap_graph) GROUP BY c.name, c.id ORDER BY reachable DESC",
+          "row_count": 5,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH target AS (SELECT id, name FROM heap_graph_class WHERE name IN ('com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1','com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','androidx.media3.common.util.ListenerSet$ListenerHolder','androidx.media3.common.ForwardingPlayer$ForwardingListener')) SELECT c.name, c.id AS type_id, COUNT(o.id) AS objects, SUM(CASE WHEN o.reachable = 1 THEN 1 ELSE 0 END) AS reachable, MIN(o.root_distance) AS min_root_distance, COUNT(DISTINCT o.root_type) AS root_types FROM target c LEFT JOIN heap_graph_object o ON o.type_id = c.id AND o.graph_sample_ts = (SELECT MAX(ts) FROM heap_graph) GROUP BY c.name, c.id ORDER BY reachable DESC",
+          "row_count": 5,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "In the current heap, 152 FeedRow closures are retained through the synthetic lambda's f$1 field; those lambda objects are retained by $Proxy3 Proxy.h fields, and the proxies are retained by ForwardingPlayer listener fields.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH target AS (SELECT o.id FROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id WHERE c.name = 'com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1' AND o.graph_sample_ts = (SELECT MAX(ts) FROM heap_graph)) SELECT oc.name AS owner_class, r.field_name, COUNT(*) AS refs FROM heap_graph_reference r JOIN target t ON t.id = r.owned_id JOIN heap_graph_object oo ON oo.id = r.owner_id JOIN heap_graph_class oc ON oc.id = oo.type_id GROUP BY oc.name, r.field_name ORDER BY refs DESC LIMIT 20",
+          "row_count": 2,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH target AS (SELECT o.id FROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id WHERE c.name = 'com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0' AND o.graph_sample_ts = (SELECT MAX(ts) FROM heap_graph)) SELECT oc.name AS owner_class, r.field_name, COUNT(*) AS refs FROM heap_graph_reference r JOIN target t ON t.id = r.owned_id JOIN heap_graph_object oo ON oo.id = r.owner_id JOIN heap_graph_class oc ON oc.id = oo.type_id GROUP BY oc.name, r.field_name ORDER BY refs DESC LIMIT 20",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH target AS (SELECT o.id FROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id WHERE c.name = '$Proxy3' AND o.graph_sample_ts = (SELECT MAX(ts) FROM heap_graph)) SELECT oc.name AS owner_class, r.field_name, COUNT(*) AS refs FROM heap_graph_reference r JOIN target t ON t.id = r.owned_id JOIN heap_graph_object oo ON oo.id = r.owner_id JOIN heap_graph_class oc ON oc.id = oo.type_id GROUP BY oc.name, r.field_name ORDER BY refs DESC LIMIT 20",
+          "row_count": 2,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Commit 6efb841e56d8071cddf03a32002d8413507b2797 removed the resetForReuse cleanup that removed every wrapped listener from the delegate and cleared wrappedListeners.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "The removed listener cleanup matches the current retained-object path: pooled player listeners retain proxy wrappers, synthetic lambdas, and FeedRow closures, identifying 6efb841e56d8071cddf03a32002d8413507b2797 as the regression culprit.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "WITH target AS (SELECT o.id FROM heap_graph_object o JOIN heap_graph_class c ON c.id = o.type_id WHERE c.name = 'com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1' AND o.graph_sample_ts = (SELECT MAX(ts) FROM heap_graph)) SELECT oc.name AS owner_class, r.field_name, COUNT(*) AS refs FROM heap_graph_reference r JOIN target t ON t.id = r.owned_id JOIN heap_graph_object oo ON oo.id = r.owner_id JOIN heap_graph_class oc ON oc.id = oo.type_id GROUP BY oc.name, r.field_name ORDER BY refs DESC LIMIT 20",
+          "row_count": 2,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "This diagnosis compares one capture per side; small heap deltas can be affected by run-to-run variation. The listener-wrapper and FeedRow retention pattern, together with the cleanup removal, makes this delta stronger than a small undifferentiated count change."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 6.277
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 43,
+    "usage": {
+      "input_tokens": 57,
+      "output_tokens": 10630,
+      "cache_read_input_tokens": 416297,
+      "cache_creation_input_tokens": 38881
+    },
+    "usd": 0.030814,
+    "wall_time_s": 142.271
+  }
+}

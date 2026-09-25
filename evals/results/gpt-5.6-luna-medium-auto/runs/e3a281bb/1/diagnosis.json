@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 401322,
+    "delta": 1787,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable heap objects increased from 399535 to 401322, a delta of 1787 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The largest class-level increases include SnapshotMutableStateImpl$StateStateRecord (+720), ParcelableSnapshotMutableState (+360), AtomicInt (+360), and the generated PostCardsKt$$ExternalSyntheticLambda2 class (+330).",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS objects FROM android_heap_graph_class_aggregation WHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation) AND type_name IN ('androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','androidx.compose.runtime.ParcelableSnapshotMutableState','androidx.compose.runtime.internal.AtomicInt','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda6','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda9') GROUP BY type_name ORDER BY type_name",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT type_name, SUM(reachable_obj_count) AS objects FROM android_heap_graph_class_aggregation WHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation) AND type_name IN ('androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord','androidx.compose.runtime.ParcelableSnapshotMutableState','androidx.compose.runtime.internal.AtomicInt','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda6','com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda9') GROUP BY type_name ORDER BY type_name",
+          "row_count": 6,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit 9facdf1 introduced the PostCards listener registration and repository listener lists; the blamed lines show that listeners are added and invoked, with no removal path in the changed code. This directly matches the increased PostCards-generated lambda and Compose state objects in the current heap.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/BlockingFakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This conclusion is based on one baseline and one current capture; heap differences can be affected by scenario timing and run-to-run variation.",
+    "The heap metric counts reachable objects, not bytes, and does not by itself prove that every additional object is permanently leaked.",
+    "The current run metadata identifies a debuggable build on an Android emulator."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 7,
+    "citations_passed": 7,
+    "wall_time_s": 12.042
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "a9f10f6f0f8cd6006c0b9a82187cf893b6e0f45bd7c8acfb24c9961399956a18",
+      "range": "2f8ab7c6f562b5a61ed028d1ba8e0ec6f2baa7df..84928ff8488faca0865dcd17906867071711f8d8"
+    },
+    "tool_calls": 23,
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 3092,
+      "cache_read_input_tokens": 51363,
+      "cache_creation_input_tokens": 20805
+    },
+    "usd": 0.009943,
+    "wall_time_s": 97.824
+  }
+}

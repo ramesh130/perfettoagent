@@ -1,0 +1,142 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "gc_time_ms",
+    "unit": "ms",
+    "baseline": 32.61125,
+    "current": 5854.487717,
+    "delta": 5821.876467,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  )\nSELECT\n  CASE\n    WHEN NOT EXISTS (SELECT 1 FROM frames)\n      OR NOT EXISTS (SELECT 1 FROM android_garbage_collection_events) THEN NULL\n    ELSE coalesce((\n      SELECT sum(gc_dur) FROM android_garbage_collection_events\n      WHERE upid = (SELECT upid FROM app)\n    ), 0) / 1e6\n  END AS value\n"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "bcd3ba1e926293a8681b6246ecdd271b5beb1592",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt"
+    ],
+    "attribution": "correlated"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Garbage-collection time increased substantially: the app's GC events totaled 32.61125 ms in the baseline and 5854.487717 ms in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n   SELECT DISTINCT f.upid, f.ui_thread_utid, a.id FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n  ), app AS (SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1)\nSELECT p.name AS process, t.name AS thread, count(*) AS gc_events, sum(g.gc_dur)/1e6 AS gc_ms, max(g.gc_dur)/1e6 AS max_gc_ms\nFROM android_garbage_collection_events g JOIN process p ON p.upid=g.upid JOIN thread t ON t.utid=g.utid\nWHERE g.upid=(SELECT upid FROM app)\nGROUP BY p.name,t.name ORDER BY gc_ms DESC",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n   SELECT DISTINCT f.upid, f.ui_thread_utid, a.id FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n  ), app AS (SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1)\nSELECT p.name AS process, t.name AS thread, count(*) AS gc_events, sum(g.gc_dur)/1e6 AS gc_ms, max(g.gc_dur)/1e6 AS max_gc_ms\nFROM android_garbage_collection_events g JOIN process p ON p.upid=g.upid JOIN thread t ON t.utid=g.utid\nWHERE g.upid=(SELECT upid FROM app)\nGROUP BY p.name,t.name ORDER BY gc_ms DESC",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The GC increase is localized to com.example.jetnews's HeapTaskDaemon: 2 collections occurred in the baseline versus 575 in the current trace.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n   SELECT DISTINCT f.upid, f.ui_thread_utid, a.id FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n  ), app AS (SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1)\nSELECT p.name AS process, t.name AS thread, count(*) AS gc_events, sum(g.gc_dur)/1e6 AS gc_ms, max(g.gc_dur)/1e6 AS max_gc_ms\nFROM android_garbage_collection_events g JOIN process p ON p.upid=g.upid JOIN thread t ON t.utid=g.utid\nWHERE g.upid=(SELECT upid FROM app)\nGROUP BY p.name,t.name ORDER BY gc_ms DESC",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nINCLUDE PERFETTO MODULE android.garbage_collection;\nWITH\n  window_frames AS (\n   SELECT DISTINCT f.upid, f.ui_thread_utid, a.id FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n  ), app AS (SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1)\nSELECT p.name AS process, t.name AS thread, count(*) AS gc_events, sum(g.gc_dur)/1e6 AS gc_ms, max(g.gc_dur)/1e6 AS max_gc_ms\nFROM android_garbage_collection_events g JOIN process p ON p.upid=g.upid JOIN thread t ON t.utid=g.utid\nWHERE g.upid=(SELECT upid FROM app)\nGROUP BY p.name,t.name ORDER BY gc_ms DESC",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The UI thread's rendering work also expanded: baseline traversal and draw-VRI[MainActivity] each totaled about 15.6 seconds, while current totals were about 64.4 seconds; current Record View#draw() and AndroidOwner:draw dominated the UI slices.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n), main AS (SELECT DISTINCT ui_thread_utid AS utid FROM window_frames WHERE upid=(SELECT upid FROM app))\nSELECT s.name, count(*) AS slices, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s JOIN thread_track t ON t.id=s.track_id\nWHERE t.utid IN (SELECT utid FROM main) AND s.dur>0\nGROUP BY s.name ORDER BY total_ms DESC LIMIT 30",
+          "row_count": 30,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH window_frames AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n), main AS (SELECT DISTINCT ui_thread_utid AS utid FROM window_frames WHERE upid=(SELECT upid FROM app))\nSELECT s.name, count(*) AS slices, sum(s.dur)/1e6 AS total_ms, max(s.dur)/1e6 AS max_ms\nFROM slice s JOIN thread_track t ON t.id=s.track_id\nWHERE t.utid IN (SELECT utid FROM main) AND s.dur>0\nGROUP BY s.name ORDER BY total_ms DESC LIMIT 30",
+          "row_count": 30,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Commit bcd3ba1e926293a8681b6246ecdd271b5beb1592 adds a per-frame grain effect to PostCardSimple: it advances state with withFrameNanos and allocates a 6000-element random List inside drawWithContent on every draw.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "bcd3ba1e926293a8681b6246ecdd271b5beb1592",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "bcd3ba1e926293a8681b6246ecdd271b5beb1592",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "The added grain-effect lines in PostCards.kt are attributed by blame to commit bcd3ba1e926293a8681b6246ecdd271b5beb1592.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "bcd3ba1e926293a8681b6246ecdd271b5beb1592",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "bcd3ba1e926293a8681b6246ecdd271b5beb1592",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This conclusion uses one capture per side, so exact magnitudes may include run-to-run noise; the increase is nevertheless large relative to that limitation.",
+    "Both captures ran on an Android emulator, and the current build was debuggable, so timings may not represent a release build on physical hardware."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 8,
+    "citations_passed": 8,
+    "wall_time_s": 7.707
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "medium",
+    "inputs": {
+      "baseline_sha256": "c101689bc091efba2fcbae7f5a2e41e6c8c0108108e1851f12554a3492d593f1",
+      "current_sha256": "18b1e7ef7bf6df8f896b9365b3f513bc401a89cffeec57ea56d5b0f7ba4a4c28",
+      "range": "3ed14adc5d086f2bac6d049970246a10da0b613f..66b0c6e109823207831a9255b33abda26d16169c"
+    },
+    "tool_calls": 20,
+    "usage": {
+      "input_tokens": 12,
+      "output_tokens": 4092,
+      "cache_read_input_tokens": 20161,
+      "cache_creation_input_tokens": 26579
+    },
+    "usd": 0.011961,
+    "wall_time_s": 76.419
+  }
+}

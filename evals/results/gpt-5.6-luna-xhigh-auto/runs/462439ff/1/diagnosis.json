@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+    "files": [
+      "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 432751 in the baseline to 434935 in the current trace, a delta of 2184.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The localized increase is in retained playback listeners and feed-row objects: ForwardingPlayer$ForwardingListener rose from 17 to 165, while FeedRow$1$1$1$1 rose from 4 to 152.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name, count(*) AS reachable_objects FROM __intrinsic_heap_graph_object AS o JOIN __intrinsic_heap_graph_class AS c ON c.id = o.type_id WHERE o.graph_sample_ts = (SELECT max(graph_sample_ts) FROM __intrinsic_heap_graph_object) AND o.reachable = 1 AND c.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1') GROUP BY c.name ORDER BY c.name",
+          "row_count": 2,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name, count(*) AS reachable_objects FROM __intrinsic_heap_graph_object AS o JOIN __intrinsic_heap_graph_class AS c ON c.id = o.type_id WHERE o.graph_sample_ts = (SELECT max(graph_sample_ts) FROM __intrinsic_heap_graph_object) AND o.reachable = 1 AND c.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1') GROUP BY c.name ORDER BY c.name",
+          "row_count": 2,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The current heap retains 164 ListenerHolder references to ForwardingPlayer$ForwardingListener and 152 SuperPlayer lambda references to FeedRow objects; the corresponding baseline counts are 16 and 4.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name AS owner_class, oc.name AS owned_class, r.field_name, count(*) AS edges FROM __intrinsic_heap_graph_reference AS r JOIN __intrinsic_heap_graph_object AS o ON o.id = r.owner_id JOIN __intrinsic_heap_graph_class AS c ON c.id = o.type_id JOIN __intrinsic_heap_graph_object AS oo ON oo.id = r.owned_id JOIN __intrinsic_heap_graph_class AS oc ON oc.id = oo.type_id WHERE oc.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1') GROUP BY c.name, oc.name, r.field_name ORDER BY oc.name, edges DESC",
+          "row_count": 5,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS owner_class, oc.name AS owned_class, r.field_name, count(*) AS edges FROM __intrinsic_heap_graph_reference AS r JOIN __intrinsic_heap_graph_object AS o ON o.id = r.owner_id JOIN __intrinsic_heap_graph_class AS c ON c.id = o.type_id JOIN __intrinsic_heap_graph_object AS oo ON oo.id = r.owned_id JOIN __intrinsic_heap_graph_class AS oc ON oc.id = oo.type_id WHERE oc.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1') GROUP BY c.name, oc.name, r.field_name ORDER BY oc.name, edges DESC",
+          "row_count": 5,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Commit 6efb841e56d8071cddf03a32002d8413507b2797 removes the resetForReuse cleanup that removed delegate listeners and cleared wrappedListeners. That change directly matches the new retained-listener and retained-feed-row reference pattern.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name AS owner_class, oc.name AS owned_class, r.field_name, count(*) AS edges FROM __intrinsic_heap_graph_reference AS r JOIN __intrinsic_heap_graph_object AS o ON o.id = r.owner_id JOIN __intrinsic_heap_graph_class AS c ON c.id = o.type_id JOIN __intrinsic_heap_graph_object AS oo ON oo.id = r.owned_id JOIN __intrinsic_heap_graph_class AS oc ON oc.id = oo.type_id WHERE oc.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1') GROUP BY c.name, oc.name, r.field_name ORDER BY oc.name, edges DESC",
+          "row_count": 5,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS owner_class, oc.name AS owned_class, r.field_name, count(*) AS edges FROM __intrinsic_heap_graph_reference AS r JOIN __intrinsic_heap_graph_object AS o ON o.id = r.owner_id JOIN __intrinsic_heap_graph_class AS c ON c.id = o.type_id JOIN __intrinsic_heap_graph_object AS oo ON oo.id = r.owned_id JOIN __intrinsic_heap_graph_class AS oc ON oc.id = oo.type_id WHERE oc.name IN ('androidx.media3.common.ForwardingPlayer$ForwardingListener','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1') GROUP BY c.name, oc.name, r.field_name ORDER BY oc.name, edges DESC",
+          "row_count": 5,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "There is only one capture per side; heap reachability is a last-heap-dump snapshot and can vary with scenario progress and garbage-collection timing.",
+    "The selected metric measures reachable object counts, not retained bytes or user-visible latency, so the trace establishes a memory-retention regression rather than a quantified frame-time regression.",
+    "The current run metadata describes a non-debuggable benchmark build running on an Android emulator."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 9,
+    "citations_passed": 9,
+    "wall_time_s": 10.678
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 55,
+    "usage": {
+      "input_tokens": 39,
+      "output_tokens": 10748,
+      "cache_read_input_tokens": 346299,
+      "cache_creation_input_tokens": 60757
+    },
+    "usd": 0.035021,
+    "wall_time_s": 212.949
+  }
+}

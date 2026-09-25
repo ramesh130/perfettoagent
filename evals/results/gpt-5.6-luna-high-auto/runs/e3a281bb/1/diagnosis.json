@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 399535,
+    "current": 401322,
+    "delta": 1787,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "medium",
+  "culprit": {
+    "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+    "files": [
+      "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+      "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 399535 in the baseline to 401322 in the current trace, a delta of 1787 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The localized heap difference is in com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2, which increased from 30 reachable objects to 360.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT upid, type_name, reachable_obj_count\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name = 'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT upid, type_name, reachable_obj_count\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name = 'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "Commit 9facdf1f56ddf777d1233826fd7fb332945ee418 adds the PostCardSimple repository-listener registration and adds a mutable favorites-listener collection that appends callbacks in FakePostsRepository.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The trace's PostCardsKt synthetic-lambda increase directly matches the new listener-registration code in PostCards.kt and the callback-retaining list in FakePostsRepository.kt, making this commit the direct culprit for the heap-growth regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT upid, type_name, reachable_obj_count\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation)\n  AND type_name = 'com.example.jetnews.ui.home.PostCardsKt$$ExternalSyntheticLambda2'",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/ui/home/PostCards.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "path": "app/src/main/java/com/example/jetnews/data/posts/impl/FakePostsRepository.kt",
+          "commit": "9facdf1f56ddf777d1233826fd7fb332945ee418",
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "This diagnosis compares one capture per build; reachable-heap counts are scenario-dependent and should be confirmed with repeated captures.",
+    "The current run is a debuggable debug build on an Android emulator, so absolute heap behavior may differ from a production device build."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 9,
+    "citations_passed": 9,
+    "wall_time_s": 9.811
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "eebe07a00b6b91395b4e341c92cc78869f3330184b396d1c9fc0c061d3cf6a9b",
+      "current_sha256": "a9f10f6f0f8cd6006c0b9a82187cf893b6e0f45bd7c8acfb24c9961399956a18",
+      "range": "2f8ab7c6f562b5a61ed028d1ba8e0ec6f2baa7df..84928ff8488faca0865dcd17906867071711f8d8"
+    },
+    "tool_calls": 36,
+    "usage": {
+      "input_tokens": 24,
+      "output_tokens": 6601,
+      "cache_read_input_tokens": 94641,
+      "cache_creation_input_tokens": 21709
+    },
+    "usd": 0.015246,
+    "wall_time_s": 158.675
+  }
+}

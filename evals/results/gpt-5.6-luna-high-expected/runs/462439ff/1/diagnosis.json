@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "verdict": "regression",
+  "metric": {
+    "name": "heap_growth_objects_by_class",
+    "unit": "objects",
+    "baseline": 432751,
+    "current": 434935,
+    "delta": 2184,
+    "sql_used": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)"
+  },
+  "confidence": "high",
+  "culprit": {
+    "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+    "files": [
+      "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt"
+    ],
+    "attribution": "direct"
+  },
+  "claims": [
+    {
+      "id": "c1",
+      "text": "Reachable Java objects increased from 432751 in the baseline to 434935 in the current trace, a delta of 2184 objects.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.memory.heap_graph.heap_graph_class_aggregation;\nSELECT sum(value) AS value FROM (\nSELECT type_name AS key, SUM(reachable_obj_count) AS value\nFROM android_heap_graph_class_aggregation\nWHERE graph_sample_ts = (\n  SELECT MAX(graph_sample_ts) FROM android_heap_graph_class_aggregation\n)\nGROUP BY type_name\nHAVING value > 0\nORDER BY key\n\n)",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The distinctive increase is in the listener-related object chain: ForwardingPlayer listeners grew from 17 to 165, ListenerHolder objects from 50 to 198, SuperPlayer wrapper lambdas from 16 to 164, and FeedRow listener objects from 4 to 152.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name AS class_name, COUNT(*) AS objects, SUM(o.reachable) AS reachable_objects\nFROM __intrinsic_heap_graph_object o JOIN __intrinsic_heap_graph_class c ON c.id=o.type_id\nWHERE c.name IN ('com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1','androidx.media3.common.util.ListenerSet$ListenerHolder','androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord')\nGROUP BY c.name ORDER BY c.name",
+          "row_count": 5,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS class_name, COUNT(*) AS objects, SUM(o.reachable) AS reachable_objects\nFROM __intrinsic_heap_graph_object o JOIN __intrinsic_heap_graph_class c ON c.id=o.type_id\nWHERE c.name IN ('com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1','androidx.media3.common.util.ListenerSet$ListenerHolder','androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.compose.runtime.SnapshotMutableStateImpl$StateStateRecord')\nGROUP BY c.name ORDER BY c.name",
+          "row_count": 5,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "In the current heap, the wrapper lambda retains both the SuperPlayer and FeedRow listener; the FeedRow listener is retained through ListenerHolder and ForwardingListener objects. The corresponding edges are much smaller in the baseline.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS owner_class, r.field_name, oc.name AS owned_class, COUNT(*) AS edges\nFROM __intrinsic_heap_graph_reference r\nJOIN __intrinsic_heap_graph_object o ON o.id=r.owner_id\nJOIN __intrinsic_heap_graph_class c ON c.id=o.type_id\nJOIN __intrinsic_heap_graph_object oo ON oo.id=r.owned_id\nJOIN __intrinsic_heap_graph_class oc ON oc.id=oo.type_id\nWHERE oc.name IN ('com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1','androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.media3.common.util.ListenerSet$ListenerHolder')\nGROUP BY owner_class, r.field_name, owned_class ORDER BY edges DESC",
+          "row_count": 7,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "SELECT c.name AS owner_class, r.field_name, oc.name AS owned_class, COUNT(*) AS edges\nFROM __intrinsic_heap_graph_reference r\nJOIN __intrinsic_heap_graph_object o ON o.id=r.owner_id\nJOIN __intrinsic_heap_graph_class c ON c.id=o.type_id\nJOIN __intrinsic_heap_graph_object oo ON oo.id=r.owned_id\nJOIN __intrinsic_heap_graph_class oc ON oc.id=oo.type_id\nWHERE oc.name IN ('com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1','androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.media3.common.util.ListenerSet$ListenerHolder')\nGROUP BY owner_class, r.field_name, owned_class ORDER BY edges DESC",
+          "row_count": 7,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "Commit 6efb841e removed the listener cleanup from SuperPlayer.resetForReuse(): it stopped removing each wrapped listener from the delegate and stopped clearing wrappedListeners. This directly matches the retained listener chain in the current heap.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "path": "superplayer-core/src/main/kotlin/com/superplayer/core/SuperPlayer.kt",
+          "commit": "6efb841e56d8071cddf03a32002d8413507b2797",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT c.name AS owner_class, r.field_name, oc.name AS owned_class, COUNT(*) AS edges\nFROM __intrinsic_heap_graph_reference r\nJOIN __intrinsic_heap_graph_object o ON o.id=r.owner_id\nJOIN __intrinsic_heap_graph_class c ON c.id=o.type_id\nJOIN __intrinsic_heap_graph_object oo ON oo.id=r.owned_id\nJOIN __intrinsic_heap_graph_class oc ON oc.id=oo.type_id\nWHERE oc.name IN ('com.superplayer.core.SuperPlayerKt$$ExternalSyntheticLambda0','com.superplayer.demo.FeedScreenKt$FeedRow$1$1$1$1','androidx.media3.common.ForwardingPlayer$ForwardingListener','androidx.media3.common.util.ListenerSet$ListenerHolder')\nGROUP BY owner_class, r.field_name, owned_class ORDER BY edges DESC",
+          "row_count": 7,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "This conclusion is based on one heap dump per trace, so smaller changes can be affected by capture-to-capture noise.",
+    "The metric measures reachable object counts, not allocation rate or retained bytes; the trace establishes the retained listener-object increase but not its eventual user-visible impact."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 8,
+    "citations_passed": 8,
+    "wall_time_s": 6.093
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "high",
+    "inputs": {
+      "baseline_sha256": "2b0bc861879082c9fc0f7c278ea35665dcef5831ddc351ea5de644936e786e8a",
+      "current_sha256": "29503f5ad182293e0327947f95444279dc24afaa406c4a310f06ca56df95ef9b",
+      "range": "ccdf1f9446d2a45d8e6dc396601f528951434322..a49a1ebb1aca7a202d251d55598256bbb7992169"
+    },
+    "tool_calls": 34,
+    "usage": {
+      "input_tokens": 27,
+      "output_tokens": 7105,
+      "cache_read_input_tokens": 186421,
+      "cache_creation_input_tokens": 52419
+    },
+    "usd": 0.025365,
+    "wall_time_s": 107.641
+  }
+}

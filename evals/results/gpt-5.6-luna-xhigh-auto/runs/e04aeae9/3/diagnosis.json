@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "frame_p95_ms",
+    "unit": "ms",
+    "baseline": 59.127166,
+    "current": 58.652709,
+    "delta": -0.474457000000001,
+    "sql_used": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH\n  window_frames AS (\n    SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n    FROM android_frames_layers AS f\n    JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n    WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n  ),\n  app AS (\n    SELECT upid FROM window_frames GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n  ),\n  frames AS (\n    SELECT * FROM window_frames WHERE upid = (SELECT upid FROM app)\n  ),\n  ranked AS (\n    SELECT dur AS ns, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n    FROM frames\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n * 95 + 99) / 100) AS value\n"
+  },
+  "confidence": "medium",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The selected end-to-end frame p95 did not regress: it decreased from 59.127166 ms in baseline to 58.652709 ms in current, a delta of -0.474457 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH wf AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM wf GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n), ranked AS (\n  SELECT dur, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n  FROM wf WHERE upid = (SELECT upid FROM app)\n)\nSELECT dur / 1e6 AS frame_p95_ms\nFROM ranked WHERE rank = (n * 95 + 99) / 100",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH wf AS (\n  SELECT DISTINCT f.upid, f.ui_thread_utid, a.id, a.dur, a.jank_type\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM wf GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n), ranked AS (\n  SELECT dur, row_number() OVER (ORDER BY dur) AS rank, count(*) OVER () AS n\n  FROM wf WHERE upid = (SELECT upid FROM app)\n)\nSELECT dur / 1e6 AS frame_p95_ms\nFROM ranked WHERE rank = (n * 95 + 99) / 100",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The frame-tail rows in both captures are dominated by Buffer Stuffing and Prediction Error labels, with App Deadline Missed also present; this points to frame-pipeline variability rather than a named application method.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH wf AS (\n  SELECT DISTINCT f.upid, a.jank_type, a.dur\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM wf GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n)\nSELECT jank_type, count(*) AS frames, max(dur) / 1e6 AS max_ms\nFROM wf WHERE upid = (SELECT upid FROM app)\nGROUP BY jank_type ORDER BY max_ms DESC LIMIT 10",
+          "row_count": 10,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH wf AS (\n  SELECT DISTINCT f.upid, a.jank_type, a.dur\n  FROM android_frames_layers AS f\n  JOIN actual_frame_timeline_slice AS a ON a.id = f.actual_frame_timeline_id\n  WHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur > 0\n), app AS (\n  SELECT upid FROM wf GROUP BY upid ORDER BY count(*) DESC, upid LIMIT 1\n)\nSELECT jank_type, count(*) AS frames, max(dur) / 1e6 AS max_ms\nFROM wf WHERE upid = (SELECT upid FROM app)\nGROUP BY jank_type ORDER BY max_ms DESC LIMIT 10",
+          "row_count": 10,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The concrete current-only blocking event examined is a Compose lazy-prefetch recompose waiting on a thread-suspend-count lock; the lock owner is the app's HeapTaskDaemon, which is running a young concurrent mark-compact GC.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.id, s.ts, s.dur / 1e6 AS dur_ms, s.depth, s.name, s.parent_id,\n       t.utid, t.name AS thread_name\nFROM slice AS s\nJOIN thread_track AS t ON t.id = s.track_id\nWHERE t.utid = 365\n  AND s.ts < 5252831270546 + 230916\n  AND s.ts + s.dur > 5252831270546\nORDER BY s.ts, s.depth, s.dur DESC",
+          "row_count": 3,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT t.utid, t.tid, t.name, p.pid, p.name AS process_name\nFROM thread AS t JOIN process AS p USING (upid)\nWHERE t.tid = 32059",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.ts, s.dur / 1e6 AS dur_ms, s.depth, s.name, t.utid, t.tid, t.name AS thread_name\nFROM slice AS s JOIN thread_track AS tt ON tt.id = s.track_id JOIN thread AS t ON t.utid = tt.utid\nWHERE t.tid = 32059 AND s.ts < 5252833544879 + 1000000 AND s.ts + s.dur > 5252831270546 - 1000000\nORDER BY s.ts, s.depth",
+          "row_count": 17,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The range contains UI changes in InterestsScreen.kt and SelectTopicButton.kt, but the trace-localized adverse work is frame-pipeline and GC/lock activity rather than a directly identified changed source method; no commit is therefore attributed.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "91eb564a995b5f47ac2de9f35636027304e2d356",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "91eb564a995b5f47ac2de9f35636027304e2d356",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "8cc4be474ff991ddc6a1a01e6e2af962039a8f85",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/SelectTopicButton.kt",
+          "commit": "8cc4be474ff991ddc6a1a01e6e2af962039a8f85",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "SELECT s.id, s.ts, s.dur / 1e6 AS dur_ms, s.depth, s.name, s.parent_id,\n       t.utid, t.name AS thread_name\nFROM slice AS s\nJOIN thread_track AS t ON t.id = s.track_id\nWHERE t.utid = 365\n  AND s.ts < 5252831270546 + 230916\n  AND s.ts + s.dur > 5252831270546\nORDER BY s.ts, s.depth, s.dur DESC",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "There is only one capture per side; the p95 change is small and should be treated as within run-to-run noise rather than a meaningful improvement.",
+    "Frame p95 includes SurfaceFlinger queue and buffer-pipeline effects. The current run is a debuggable debug build on an Android emulator."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 10,
+    "citations_passed": 10,
+    "wall_time_s": 4.766
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "bd5765feeff82d9aa876f81b867c7c3395373f1b045e1ed3b0092ad3df1ad2f9",
+      "current_sha256": "ff6175cd3ffdc556ff58c3d0d71a48e3b24d0393a503f683fff585a1028d52b9",
+      "range": "20cc4b14f24f92dc086da1912767170e56ac4bc0..559ed6c294be6ef7774233cc71b452c4d512ea78"
+    },
+    "tool_calls": 76,
+    "usage": {
+      "input_tokens": 75,
+      "output_tokens": 25755,
+      "cache_read_input_tokens": 916096,
+      "cache_creation_input_tokens": 67424
+    },
+    "usd": 0.066099,
+    "wall_time_s": 314.791
+  }
+}

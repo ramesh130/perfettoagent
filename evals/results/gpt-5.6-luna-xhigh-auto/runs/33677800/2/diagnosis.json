@@ -1,0 +1,179 @@
+{
+  "schema_version": 1,
+  "verdict": "no_regression",
+  "metric": {
+    "name": "startup_ttid_ms",
+    "unit": "ms",
+    "baseline": 839.504417,
+    "current": 854.851167,
+    "delta": 15.346750000000043,
+    "sql_used": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH\n  cold AS (\n    SELECT s.package, d.time_to_initial_display AS ns\n    FROM android_startups AS s\n    JOIN android_startup_time_to_display AS d USING (startup_id)\n    WHERE s.startup_type = 'cold'\n  ),\n  app AS (\n    SELECT package FROM cold GROUP BY package ORDER BY count(*) DESC, package LIMIT 1\n  ),\n  ranked AS (\n    SELECT ns, row_number() OVER (ORDER BY ns) AS rank, count(*) OVER () AS n\n    FROM cold\n    WHERE package = (SELECT package FROM app) AND ns IS NOT NULL\n  )\nSELECT (SELECT ns / 1e6 FROM ranked WHERE rank = (n + 1) / 2) AS value\n"
+  },
+  "confidence": "low",
+  "culprit": null,
+  "claims": [
+    {
+      "id": "c1",
+      "text": "The package-specific startup metric has 20 cold starts in each trace. Its median TTID increased from 839.504417 ms to 854.851167 ms, but the means increased only from 849.06890865 ms to 852.8640378 ms, indicating substantial run-to-run variation rather than a confirmed regression.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (SELECT d.time_to_initial_display AS ns FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id) WHERE s.package='com.example.jetnews' AND s.startup_type='cold' AND d.time_to_initial_display IS NOT NULL), ranked AS (SELECT ns,row_number() OVER(ORDER BY ns) AS r,count(*) OVER() AS n FROM cold)\nSELECT count(*) AS cold_starts,avg(ns)/1e6 AS mean_ttid_ms,(SELECT ns/1e6 FROM ranked WHERE r=(n+1)/2) AS median_ttid_ms,min(ns)/1e6 AS min_ttid_ms,max(ns)/1e6 AS max_ttid_ms FROM cold",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nWITH cold AS (SELECT d.time_to_initial_display AS ns FROM android_startups s JOIN android_startup_time_to_display d USING(startup_id) WHERE s.package='com.example.jetnews' AND s.startup_type='cold' AND d.time_to_initial_display IS NOT NULL), ranked AS (SELECT ns,row_number() OVER(ORDER BY ns) AS r,count(*) OVER() AS n FROM cold)\nSELECT count(*) AS cold_starts,avg(ns)/1e6 AS mean_ttid_ms,(SELECT ns/1e6 FROM ranked WHERE r=(n+1)/2) AS median_ttid_ms,min(ns)/1e6 AS min_ttid_ms,max(ns)/1e6 AS max_ttid_ms FROM cold",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c2",
+      "text": "The Jetnews UI frame distribution did not worsen: target-process frame p95 decreased from 248.582792 ms to 240.0765 ms, while UI doFrame p95 decreased from 233.890583 ms to 223.513583 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH frames AS (\n SELECT DISTINCT a.id,a.dur,a.jank_type,f.upid,f.ui_thread_utid\n FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id JOIN process p ON p.upid=f.upid\n WHERE p.name='com.example.jetnews' AND f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n), ranked AS (SELECT dur/1e6 AS frame_ms,row_number() OVER(ORDER BY dur) AS r,count(*) OVER() AS n FROM frames)\nSELECT count(*) AS frame_count,(SELECT frame_ms FROM ranked WHERE r=(n*50+99)/100) AS p50_ms,(SELECT frame_ms FROM ranked WHERE r=(n*95+99)/100) AS p95_ms,(SELECT frame_ms FROM ranked WHERE r=(n*99+99)/100) AS p99_ms,max(frame_ms) AS max_ms FROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH frames AS (\n SELECT DISTINCT a.id,a.dur,a.jank_type,f.upid,f.ui_thread_utid\n FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id JOIN process p ON p.upid=f.upid\n WHERE p.name='com.example.jetnews' AND f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n), ranked AS (SELECT dur/1e6 AS frame_ms,row_number() OVER(ORDER BY dur) AS r,count(*) OVER() AS n FROM frames)\nSELECT count(*) AS frame_count,(SELECT frame_ms FROM ranked WHERE r=(n*50+99)/100) AS p50_ms,(SELECT frame_ms FROM ranked WHERE r=(n*95+99)/100) AS p95_ms,(SELECT frame_ms FROM ranked WHERE r=(n*99+99)/100) AS p99_ms,max(frame_ms) AS max_ms FROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH app_frames AS (\n SELECT DISTINCT f.ui_thread_utid,f.upid,a.id\n FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id JOIN process p ON p.upid=f.upid\n WHERE p.name='com.example.jetnews' AND f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n), ranked AS (\n SELECT s.dur/1e6 AS ui_ms,row_number() OVER(ORDER BY s.dur) AS r,count(*) OVER() AS n\n FROM android_frames_choreographer_do_frame d JOIN slice s ON s.id=d.id\n WHERE (d.upid,d.ui_thread_utid) IN (SELECT upid,ui_thread_utid FROM app_frames)\n)\nSELECT count(*) AS do_frame_count,(SELECT ui_ms FROM ranked WHERE r=(n*50+99)/100) AS p50_ui_ms,(SELECT ui_ms FROM ranked WHERE r=(n*95+99)/100) AS p95_ui_ms,max(ui_ms) AS max_ui_ms FROM ranked",
+          "row_count": 1,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nWITH app_frames AS (\n SELECT DISTINCT f.ui_thread_utid,f.upid,a.id\n FROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id JOIN process p ON p.upid=f.upid\n WHERE p.name='com.example.jetnews' AND f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\n), ranked AS (\n SELECT s.dur/1e6 AS ui_ms,row_number() OVER(ORDER BY s.dur) AS r,count(*) OVER() AS n\n FROM android_frames_choreographer_do_frame d JOIN slice s ON s.id=d.id\n WHERE (d.upid,d.ui_thread_utid) IN (SELECT upid,ui_thread_utid FROM app_frames)\n)\nSELECT count(*) AS do_frame_count,(SELECT ui_ms FROM ranked WHERE r=(n*50+99)/100) AS p50_ui_ms,(SELECT ui_ms FROM ranked WHERE r=(n*95+99)/100) AS p95_ui_ms,max(ui_ms) AS max_ui_ms FROM ranked",
+          "row_count": 1,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "text": "The startup difference localizes to variable framework and rendering work, not to a source-named application slice: in representative startups, baseline had bindApplication at 352.332917 ms, Choreographer#doFrame at 319.893292 ms, and earlyPreloadGlContext at 42.907667 ms; current had bindApplication at 326.8875 ms, Choreographer#doFrame at 328.015542 ms, and earlyPreloadGlContext at 54.373334 ms.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT sl.name,count(*) AS count,sum(sl.dur)/1e6 AS total_ms\nFROM android_startups s JOIN android_startup_time_to_display d USING(startup_id) JOIN process p ON p.upid=d.upid JOIN thread th ON th.upid=p.upid JOIN thread_track tt ON tt.utid=th.utid JOIN slice sl ON sl.track_id=tt.id\nWHERE s.startup_id=176 AND sl.ts>=s.ts AND sl.ts<s.ts_end AND sl.depth=0\n  AND (sl.name='bindApplication' OR sl.name='earlyPreloadGlContext' OR sl.name GLOB 'Choreographer#doFrame *')\nGROUP BY sl.name ORDER BY total_ms DESC",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT sl.name,count(*) AS count,sum(sl.dur)/1e6 AS total_ms\nFROM android_startups s JOIN android_startup_time_to_display d USING(startup_id) JOIN process p ON p.upid=d.upid JOIN thread th ON th.upid=p.upid JOIN thread_track tt ON tt.utid=th.utid JOIN slice sl ON sl.track_id=tt.id\nWHERE s.startup_id=235 AND sl.ts>=s.ts AND sl.ts<s.ts_end AND sl.depth=0\n  AND (sl.name='bindApplication' OR sl.name='earlyPreloadGlContext' OR sl.name GLOB 'Choreographer#doFrame *')\nGROUP BY sl.name ORDER BY total_ms DESC",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c4",
+      "text": "The generic frame metric would select the launcher rather than Jetnews: the launcher has 2,851 baseline frames and 2,963 current frames, while the largest Jetnews process has only 30 frames in each trace. The package-specific startup metric is therefore the more relevant choice here.",
+      "citations": [
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nSELECT p.upid,p.pid,p.name AS process_name,count(DISTINCT a.id) AS frame_rows\nFROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id\nJOIN process p ON p.upid=f.upid\nWHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\nGROUP BY p.upid,p.pid,p.name\nORDER BY frame_rows DESC",
+          "row_count": 22,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.frames.timeline;\nSELECT p.upid,p.pid,p.name AS process_name,count(DISTINCT a.id) AS frame_rows\nFROM android_frames_layers f JOIN actual_frame_timeline_slice a ON a.id=f.actual_frame_timeline_id\nJOIN process p ON p.upid=f.upid\nWHERE f.layer_name NOT GLOB '*SurfaceView*' AND a.dur>0\nGROUP BY p.upid,p.pid,p.name\nORDER BY frame_rows DESC",
+          "row_count": 22,
+          "error": null
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "text": "The range contains UI changes to the topic-selection button and Interests rows, but the trace does not identify either source path as the cause of the startup variation.",
+      "citations": [
+        {
+          "kind": "commit",
+          "sha": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/SelectTopicButton.kt",
+          "commit": "3e2fdaf2216b048731671bb61bd0fe7d2f2372a8",
+          "error": null
+        },
+        {
+          "kind": "commit",
+          "sha": "cd4f22cbbddcc8efac9413ac2678b06e321492aa",
+          "path": "app/src/main/java/com/example/jetnews/ui/interests/InterestsScreen.kt",
+          "commit": "cd4f22cbbddcc8efac9413ac2678b06e321492aa",
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "baseline",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT sl.name,count(*) AS count,sum(sl.dur)/1e6 AS total_ms\nFROM android_startups s JOIN android_startup_time_to_display d USING(startup_id) JOIN process p ON p.upid=d.upid JOIN thread th ON th.upid=p.upid JOIN thread_track tt ON tt.utid=th.utid JOIN slice sl ON sl.track_id=tt.id\nWHERE s.startup_id=176 AND sl.ts>=s.ts AND sl.ts<s.ts_end AND sl.depth=0\n  AND (sl.name='bindApplication' OR sl.name='earlyPreloadGlContext' OR sl.name GLOB 'Choreographer#doFrame *')\nGROUP BY sl.name ORDER BY total_ms DESC",
+          "row_count": 4,
+          "error": null
+        },
+        {
+          "kind": "trace",
+          "trace": "current",
+          "sql": "INCLUDE PERFETTO MODULE android.startup.startups;\nINCLUDE PERFETTO MODULE android.startup.time_to_display;\nSELECT sl.name,count(*) AS count,sum(sl.dur)/1e6 AS total_ms\nFROM android_startups s JOIN android_startup_time_to_display d USING(startup_id) JOIN process p ON p.upid=d.upid JOIN thread th ON th.upid=p.upid JOIN thread_track tt ON tt.utid=th.utid JOIN slice sl ON sl.track_id=tt.id\nWHERE s.startup_id=235 AND sl.ts>=s.ts AND sl.ts<s.ts_end AND sl.depth=0\n  AND (sl.name='bindApplication' OR sl.name='earlyPreloadGlContext' OR sl.name GLOB 'Choreographer#doFrame *')\nGROUP BY sl.name ORDER BY total_ms DESC",
+          "row_count": 3,
+          "error": null
+        }
+      ]
+    }
+  ],
+  "caveats": [
+    "the current trace's build was debuggable (run metadata: debuggable), so ART ran it with fewer optimisations and its timings overstate a release build's",
+    "Each side is one capture, although each capture contains 20 cold starts; the remaining TTID shift is small relative to emulator, JIT, scheduling, and rendering variability.",
+    "The current metadata describes a debuggable debug build on an sdk_gphone64_arm64 emulator; baseline build metadata was not recorded.",
+    "No app stack samples or source-level slice names connect the measured framework/render slices to a changed method, so commit attribution is not justified."
+  ],
+  "dropped_claims": [],
+  "verification": {
+    "verdict_before": "no_regression",
+    "explanation": null,
+    "culprit_dropped": null,
+    "metric_dropped": null,
+    "citations_checked": 14,
+    "citations_passed": 14,
+    "wall_time_s": 40.337
+  },
+  "run": {
+    "provider": "openai",
+    "model": "gpt-5.6-luna",
+    "effort": "xhigh",
+    "inputs": {
+      "baseline_sha256": "58f6e79fdc6541f98d047bef4ad95d2d62f8ab837486a5cd744f1b070a1257a9",
+      "current_sha256": "a90ad2b7002241fa3765ab086355ce11efc4c140c12b7a44e475682f514480cd",
+      "range": "20c3d5cf9b136abfcaa90ef97297c28501c31f4a..bb767eec9f98c0e9493140735e2e477828fcb9b1"
+    },
+    "tool_calls": 99,
+    "usage": {
+      "input_tokens": 63,
+      "output_tokens": 24738,
+      "cache_read_input_tokens": 575071,
+      "cache_creation_input_tokens": 59798
+    },
+    "usd": 0.056149,
+    "wall_time_s": 557.652
+  }
+}
