@@ -86,8 +86,8 @@ expected culprit and the patch live apart, in `evals/answers/` (ADR-0015). Case 
 
 ## Phase 2: Agent and eval
 
-**Exit:** the README has real numbers, `docs/postmortem.md` exists, and a two-minute
-recording (trace in, diagnosis out) is linked.
+**Exit:** the README has real numbers, and `docs/postmortem.md` exists. The walkthrough
+recording was dropped (ADR-0032).
 
 ### 6. [x] Git and repo tools ([#24](https://github.com/ramesh130/perfettoagent/issues/24) git tools, [#25](https://github.com/ramesh130/perfettoagent/issues/25) `symbolize`, [#31](https://github.com/ramesh130/perfettoagent/issues/31) `read_run_metadata`)
 `get_git_log`, `get_git_diff`, `git_blame`, `grep_repo`, `symbolize` and
@@ -165,11 +165,10 @@ the inputs. A rejected diagnosis is a candidate eval case. The trace hashes and 
 from `diagnosis.json`'s `run.inputs`, recorded by `diagnose`; `partial` names the kept
 claims that are right (ADR-0026).
 
-### 11. [~] Write-up ([#37](https://github.com/ramesh130/perfettoagent/issues/37))
-The README opens with the one-liner, a real diagnosis and the eval table. Add
-`docs/postmortem.md` covering what the agent got wrong and why. Record a two-minute
-walkthrough. The README and postmortem are written from `evals/results/`; the recording is
-still to do.
+### 11. [x] Write-up ([#37](https://github.com/ramesh130/perfettoagent/issues/37))
+The README opens with the one-liner, what the tool is for, a real diagnosis and the eval
+table. `docs/postmortem.md` covers what the agent got wrong and why. Both are written from
+`evals/results/`. No walkthrough recording (ADR-0032).
 
 ## Open questions
 
@@ -195,5 +194,5 @@ Settle each one by recording an ADR in `docs/adr/`.
 
 ## Definition of done (v1)
 
-The eval table is published in the README, backed by `evals/results/`, and the walkthrough is
-recorded.
+The eval table is published in the README, backed by `evals/results/` (the walkthrough
+recording was dropped, ADR-0032).
