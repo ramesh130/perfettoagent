@@ -57,7 +57,8 @@ Every number below is from [`evals/results/summary.md`](evals/results/summary.md
 is generated from the per-run results beside it.
 
 The eval covers 20 cases over two apps, [superPlayer](docs/adr/0015-eval-cases-and-their-fixture-repo.md)
-and [JetNews](docs/adr/0028-jetnews-eval-cases.md):
+and [JetNews](docs/adr/0028-jetnews-eval-cases.md), whose plants and captures are in
+[`jetnews-perf`](https://github.com/ramesh130/jetnews-perf):
 - **Planted:** each app has five regressions (main-thread I/O on startup, allocation storm,
   synchronous sleep, layout thrash, listener leak), each in a range of 10 to 12 commits with
   decoys.
